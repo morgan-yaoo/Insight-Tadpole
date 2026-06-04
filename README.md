@@ -1,41 +1,42 @@
 # Insight Tadpole
 
-A local-first research note app for capturing ideas, pasted paper excerpts, source metadata, auto-categories, editable subcategories, and tags. When launched through the local server or macOS bundle, it stores notes as real files on your Mac and keeps sorted Markdown copies by category, subcategory, and tag.
+Insight Tadpole is a local-first research note app for capturing ideas, pasted paper excerpts, reading notes, source metadata, categories, subcategories, tags, and revisit queues. It is designed for researchers who want their note library to stay on their own Mac while still being searchable and automatically organized.
 
-## Run Locally
+Current release: `v0.1.1`
 
-```bash
-npm start
+Official repository: <https://github.com/morgan-yaoo/Insight-Tadpole>
+
+## Download
+
+Apple Silicon release builds are published from the GitHub Releases page:
+
+<https://github.com/morgan-yaoo/Insight-Tadpole/releases>
+
+The current local build artifacts are:
+
+```text
+dist/Insight Tadpole-Apple-Silicon.dmg
+dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
-Then open `http://localhost:3214`.
+The app is built for Apple Silicon Macs. These builds are unsigned and not notarized, so macOS Gatekeeper may show a warning the first time the app is opened on another Mac.
 
-Opening `index.html` directly in a browser still works as a fallback, but that mode can only use browser localStorage. Use `npm start` or the macOS app bundle for local PC file storage.
+## Privacy And Storage
 
-## Test
+Insight Tadpole stores your notes locally by default. Your personal note data, images, exports, and storage folders are not part of this repository unless you deliberately copy them into the project folder and commit them.
 
-```bash
-npm run check
-npm run test:logical-pressure
-```
-
-The logical and pressure test starts an isolated localhost server with a temporary data folder, checks API round trips, sorted Markdown folders, exports, and repeated large-library writes, then removes the temporary test data.
-
-## Where Notes Are Stored
-
-By default, the local server writes to:
+Default storage folder:
 
 ```text
 $HOME/Insight Tadpole Data/
 ```
-
-If an older `Insight Tadpole`, `Insight tadpole`, or `Research Assist Notes` storage folder exists and the default folder does not, the local server copies the old data into `$HOME/Insight Tadpole Data/` on first launch.
 
 Inside that folder:
 
 ```text
 notes.json
 settings.json
+attachments/
 sorted-notes/
   by-category/
   by-subcategory/
@@ -46,17 +47,57 @@ sorted-notes/
 exports/
 ```
 
+If an older `Insight Tadpole`, `Insight tadpole`, or `Research Assist Notes` storage folder exists and the default folder does not, the local server copies the old data into `$HOME/Insight Tadpole Data/` on first launch.
+
 You can change the storage location in the Storage page with `Choose Storage Folder`. If the chosen folder is empty, the current library is copied there. If it already contains `notes.json` or `settings.json`, Insight Tadpole switches to that library without overwriting it.
 
-You can override the data folder with:
+You can also override the data folder when running locally:
 
 ```bash
 RESEARCH_ASSIST_DATA_DIR="/path/to/my/notes" npm start
 ```
 
-## macOS App Bundle
+## Features
 
-Build a lightweight macOS launcher bundle:
+- Capture ideas, excerpts, paper references, tasks, questions, and reading notes.
+- Add images with the file picker, drag-and-drop, or clipboard paste.
+- Click image thumbnails to open a full-screen image preview.
+- Uploaded image files are renamed from the note title when saved.
+- Store optional conference/journal and year metadata for paper notes.
+- Write notes in Markdown, HTML, or plain text with a live preview.
+- Use tag chips with comma, semicolon, or Enter input, plus click-to-remove tags.
+- Use editable categories, saved colors, and nested subcategories.
+- Search notes by text, category, subcategory, tag, pinned state, and review state.
+- Revisit notes with due-now, all-notes, unreviewed, pinned, tag-indexed, and category-indexed queues.
+- Keep sorted Markdown copies by category, subcategory, and tag.
+- Export JSON and Markdown snapshots into the visible `exports` folder.
+
+## Run Locally
+
+```bash
+npm start
+```
+
+Then open:
+
+```text
+http://localhost:3214
+```
+
+Opening `index.html` directly in a browser still works as a fallback, but that mode can only use browser localStorage. Use `npm start` or the macOS app bundle for real local file storage.
+
+## Test
+
+```bash
+npm run check
+npm run test:logical-pressure
+```
+
+The logical and pressure test starts an isolated localhost server with a temporary data folder, checks API round trips, attachment deletion, sorted Markdown folders, exports, and repeated large-library writes, then removes the temporary test data.
+
+## Build
+
+Build the lightweight macOS launcher bundle:
 
 ```bash
 npm run build:mac
@@ -67,10 +108,6 @@ The app appears at:
 ```text
 dist/Insight Tadpole.app
 ```
-
-This bundle starts the local Node server and opens the app in the default browser. It does not require Electron or any npm dependencies.
-
-## Apple Silicon DMG / PKG
 
 Build distributable Apple Silicon artifacts:
 
@@ -87,24 +124,14 @@ dist/Insight Tadpole-Apple-Silicon.pkg
 
 The PKG is restricted to `arm64` and macOS 12.0 or later. The launcher uses an embedded runtime at `Contents/Resources/runtime/node` if present; otherwise it requires Node.js to be installed on the Mac.
 
-These local artifacts are unsigned and not notarized, so Gatekeeper may show a warning when they are opened on another Mac.
+## Release 0.1.1
 
-## Features
-
-- Capture notes, excerpts, paper references, and research questions.
-- Add images with the file picker, drag-and-drop, or clipboard paste.
-- Store optional conference/journal and year metadata for paper notes.
-- Write notes in Markdown, HTML, or plain text.
-- Click any image thumbnail to open a full-screen preview.
-- Image files are renamed from the note title when saved.
-- Revisit existing notes with a Review queue, reviewed/later scheduling, and review-log reflections.
-- Automatic category suggestions for ideas, literature notes, methods, evidence, questions, quotes, and tasks.
-- Editable custom categories with saved names, colors, and nested subcategories.
-- Auto-suggested tags plus manual tag editing.
-- All Notes page with category, subcategory, tag, pinned, and text search filters.
-- Separate Capture, Review, All Notes, Organize, and Storage pages.
-- Local file persistence with sorted Markdown folders.
-- JSON and Markdown export snapshots saved into the visible `exports` folder.
+- Improved Capture with image drag/drop, clipboard paste, file picker upload, and title-based image filenames.
+- Added Markdown, HTML, and plain text note modes with live preview.
+- Added tag chips that support comma, semicolon, Enter, and click-to-remove behavior.
+- Added optional paper metadata fields for conference/journal and year.
+- Added full-screen image preview from thumbnails.
+- Moved `Clear Draft` and `Cancel Edit` next to `Save Note`.
 
 ## License
 
