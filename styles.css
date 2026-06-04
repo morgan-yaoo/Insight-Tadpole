@@ -1477,3 +1477,51 @@ textarea {
     padding: 14px;
   }
 }
+
+/* Interaction reliability fixes */
+.note-preview-panel {
+  margin-top: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(255, 253, 248, 0.72);
+  padding: 12px;
+}
+
+.format-preview-mode {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.note-format-preview {
+  min-height: 70px;
+  margin-top: 10px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-strong);
+  padding: 12px;
+}
+
+.preview-empty {
+  color: var(--muted);
+  margin: 0;
+}
+
+.draft-tag-chips:empty {
+  display: none;
+}
+
+.draft-tag-chip:hover {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.attachment-empty {
+  padding: 10px;
+  text-align: center;
+}

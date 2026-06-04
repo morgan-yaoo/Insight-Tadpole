@@ -140,6 +140,7 @@ const elements = {
   attachmentPanel: document.querySelector(".attachment-panel"),
   attachmentPreview: document.querySelector("#attachmentPreview"),
   bodyInput: document.querySelector("#bodyInput"),
+  capturePanel: document.querySelector('[data-page-panel="capture"]'),
   categoryColorInput: document.querySelector("#categoryColorInput"),
   categoryNameInput: document.querySelector("#categoryNameInput"),
   categoryNav: document.querySelector("#categoryNav"),
@@ -153,6 +154,8 @@ const elements = {
   exportsFolderPath: document.querySelector("#exportsFolderPath"),
   draftTagChips: document.querySelector("#draftTagChips"),
   formatSelect: document.querySelector("#formatSelect"),
+  formatPreview: document.querySelector("#formatPreview"),
+  formatPreviewMode: document.querySelector("#formatPreviewMode"),
   importInput: document.querySelector("#importInput"),
   imageInput: document.querySelector("#imageInput"),
   libraryCount: document.querySelector("#libraryCount"),
@@ -209,6 +212,7 @@ let state = {
   selectedId: null,
   editingId: null,
   draftAttachments: [],
+  draftTags: [],
   pendingAttachmentDeletes: [],
   originalDraftAttachmentKeys: new Set(),
   noteOrder: "updated",
@@ -980,18 +984,25 @@ function readFileAsDataUrl(file) {
 }
 
 async function imageFileToAttachment(file) {
-  if (!file.type.startsWith("image/")) {
+  const type = inferImageMime(file.name, file.type);
+  if (!type) {
     throw new Error("Only image files can be attached");
   }
   if (file.size > 20 * 1024 * 1024) {
     throw new Error("Images must be 20 MB or smaller");
   }
 
-  const dataUrl = await readFileAsDataUrl(file);
+  let dataUrl = await readFileAsDataUrl(file);
+  if (!dataUrl.startsWith("data:image/")) {
+    const commaIndex = dataUrl.indexOf(",");
+    const payload = commaIndex >= 0 ? dataUrl.slice(commaIndex + 1) : dataUrl;
+    dataUrl = "data:" + type + ";base64," + payload;
+  }
+
   if (state.storage.mode === "files") {
     const result = await apiPost("/api/attachments", {
       name: file.name,
-      type: file.type,
+      type,
       size: file.size,
       dataUrl
     });
@@ -1001,7 +1012,7 @@ async function imageFileToAttachment(file) {
 
   return normalizeAttachment({
     name: file.name,
-    type: file.type,
+    type,
     size: file.size,
     url: dataUrl,
     dataUrl,
@@ -1009,15 +1020,53 @@ async function imageFileToAttachment(file) {
   });
 }
 
+const imageFileExtensions = new Set([".png", ".jpg", ".jpeg", ".gif", ".webp", ".heic", ".heif", ".bmp", ".tif", ".tiff"]);
+
+function imageExtensionFromName(name) {
+  const match = String(name || "").toLowerCase().match(/\.[a-z0-9]+$/);
+  return match ? match[0] : "";
+}
+
+function inferImageMime(name, type = "") {
+  const normalized = String(type || "").toLowerCase();
+  if (normalized.startsWith("image/")) return normalized;
+  return {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".heic": "image/heic",
+    ".heif": "image/heif",
+    ".bmp": "image/bmp",
+    ".tif": "image/tiff",
+    ".tiff": "image/tiff"
+  }[imageExtensionFromName(name)] || "";
+}
+
+function isImageFile(file) {
+  return Boolean(file && inferImageMime(file.name, file.type));
+}
+
 function imageFilesFromFileList(fileList) {
-  return [...(fileList || [])].filter((file) => file?.type?.startsWith("image/"));
+  return [...(fileList || [])].filter(isImageFile);
+}
+
+function dataTransferHasFileDrop(dataTransfer) {
+  return Boolean(
+    dataTransfer && (
+      [...(dataTransfer.types || [])].includes("Files") ||
+      [...(dataTransfer.items || [])].some((item) => item.kind === "file") ||
+      dataTransfer.files?.length
+    )
+  );
 }
 
 function imageFilesFromDataTransfer(dataTransfer) {
   const itemFiles = [...(dataTransfer?.items || [])]
-    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .filter((item) => item.kind === "file")
     .map((item) => item.getAsFile())
-    .filter(Boolean);
+    .filter(isImageFile);
   return itemFiles.length ? itemFiles : imageFilesFromFileList(dataTransfer?.files);
 }
 
@@ -1091,18 +1140,23 @@ function setAttachmentDropActive(active) {
 }
 
 function handleDraftDragOver(event) {
-  const hasImages = imageFilesFromDataTransfer(event.dataTransfer).length > 0;
-  if (!hasImages) return;
+  if (!dataTransferHasFileDrop(event.dataTransfer)) return;
   event.preventDefault();
+  event.stopPropagation();
   event.dataTransfer.dropEffect = "copy";
   setAttachmentDropActive(true);
 }
 
 async function handleDraftDrop(event) {
-  const files = imageFilesFromDataTransfer(event.dataTransfer);
-  if (!files.length) return;
+  if (!dataTransferHasFileDrop(event.dataTransfer)) return;
   event.preventDefault();
+  event.stopPropagation();
   setAttachmentDropActive(false);
+  const files = imageFilesFromDataTransfer(event.dataTransfer);
+  if (!files.length) {
+    showToast("Drop image files only");
+    return;
+  }
   await addImageFilesToDraft(files);
 }
 
@@ -1228,7 +1282,7 @@ function updateLiveAnalysis() {
     showToast(`Category set to ${category.name}`);
   };
 
-  const existing = new Set(normalizeTags(elements.tagInput.value));
+  const existing = new Set(currentDraftTags({ includePending: false }));
   elements.suggestedTags.innerHTML = "";
   const suggested = analysis.tags.length ? analysis.tags : ["idea", "paper", "follow up"];
 
@@ -1244,35 +1298,53 @@ function updateLiveAnalysis() {
     elements.suggestedTags.append(button);
   });
   renderDraftTagChips();
+  renderDraftFormatPreview();
+}
+
+function currentDraftTags(options = {}) {
+  const includePending = options.includePending !== false;
+  return normalizeTags([
+    ...state.draftTags,
+    ...(includePending ? normalizeTags(elements.tagInput.value) : [])
+  ]);
 }
 
 function setDraftTags(tags) {
-  elements.tagInput.value = normalizeTags(tags).join(", ");
+  state.draftTags = normalizeTags(tags);
   renderDraftTagChips();
 }
 
 function commitTagInput() {
-  setDraftTags(elements.tagInput.value);
+  const pending = normalizeTags(elements.tagInput.value);
+  if (!pending.length) {
+    elements.tagInput.value = "";
+    renderDraftTagChips();
+    updateLiveAnalysis();
+    return;
+  }
+  state.draftTags = normalizeTags([...state.draftTags, ...pending]);
+  elements.tagInput.value = "";
+  renderDraftTagChips();
   updateLiveAnalysis();
 }
 
 function removeTagFromDraft(tag) {
-  setDraftTags(normalizeTags(elements.tagInput.value).filter((item) => item !== tag));
+  state.draftTags = state.draftTags.filter((item) => item !== tag);
+  renderDraftTagChips();
   updateLiveAnalysis();
 }
 
 function toggleTagInDraft(tag) {
-  const tags = normalizeTags(elements.tagInput.value);
-  setDraftTags(tags.includes(tag)
-    ? tags.filter((item) => item !== tag)
-    : [...tags, tag]);
+  setDraftTags(state.draftTags.includes(tag)
+    ? state.draftTags.filter((item) => item !== tag)
+    : [...state.draftTags, tag]);
   updateLiveAnalysis();
 }
 
 function renderDraftTagChips() {
   if (!elements.draftTagChips) return;
   elements.draftTagChips.innerHTML = "";
-  normalizeTags(elements.tagInput.value).forEach((tag) => {
+  state.draftTags.forEach((tag) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "draft-tag-chip";
@@ -1281,6 +1353,18 @@ function renderDraftTagChips() {
     button.addEventListener("click", () => removeTagFromDraft(tag));
     elements.draftTagChips.append(button);
   });
+}
+
+function renderDraftFormatPreview() {
+  if (!elements.formatPreview) return;
+  const format = normalizeNoteFormat(elements.formatSelect.value);
+  elements.formatPreviewMode.textContent = format === "html" ? "HTML" : format === "plain" ? "Plain Text" : "Markdown";
+  const body = elements.bodyInput.value.trim();
+  if (!body) {
+    elements.formatPreview.innerHTML = '<p class="preview-empty">Preview appears here while you write.</p>';
+    return;
+  }
+  elements.formatPreview.innerHTML = renderNoteContent({ body, format, reviewLog: [] });
 }
 
 function render() {
@@ -2478,7 +2562,7 @@ async function saveDraft() {
     format: normalizeNoteFormat(elements.formatSelect.value),
     category,
     subcategory,
-    tags: normalizeTags(elements.tagInput.value || analysis.tags),
+    tags: currentDraftTags().length ? currentDraftTags() : analysis.tags,
     attachments: state.draftAttachments.map(normalizeAttachment)
   };
 
@@ -2529,6 +2613,7 @@ async function clearDraft(options = {}) {
   state.editingId = null;
   state.draftCategoryTouched = false;
   state.draftAttachments = [];
+  state.draftTags = [];
   state.pendingAttachmentDeletes = [];
   state.originalDraftAttachmentKeys = new Set();
   elements.titleInput.value = "";
@@ -2555,6 +2640,7 @@ function editNote(id) {
   state.draftCategoryTouched = true;
   state.activePage = "capture";
   state.draftAttachments = normalizeAttachments(note.attachments);
+  state.draftTags = normalizeTags(note.tags);
   state.pendingAttachmentDeletes = [];
   state.originalDraftAttachmentKeys = new Set(state.draftAttachments.map(attachmentDeleteKey));
   elements.titleInput.value = note.title;
@@ -2563,7 +2649,7 @@ function editNote(id) {
   elements.yearInput.value = note.year || "";
   elements.bodyInput.value = note.body;
   elements.formatSelect.value = normalizeNoteFormat(note.format);
-  elements.tagInput.value = note.tags.join(", ");
+  elements.tagInput.value = "";
   elements.categorySelect.value = note.category;
   renderSubcategorySelect();
   elements.subcategorySelect.value = note.subcategory || "";
@@ -2919,19 +3005,24 @@ function bindEvents() {
     button.addEventListener("click", () => setPage(button.dataset.pageButton));
   });
 
-  [elements.titleInput, elements.sourceInput, elements.venueInput, elements.yearInput, elements.bodyInput, elements.tagInput].forEach((input) => {
+  [elements.titleInput, elements.sourceInput, elements.venueInput, elements.yearInput, elements.bodyInput].forEach((input) => {
     input.addEventListener("input", updateLiveAnalysis);
   });
   elements.formatSelect.addEventListener("change", updateLiveAnalysis);
   elements.tagInput.addEventListener("blur", commitTagInput);
   elements.tagInput.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
+    if (["Enter", ",", ";"].includes(event.key)) {
       event.preventDefault();
       commitTagInput();
     }
   });
   elements.tagInput.addEventListener("input", () => {
-    if (/[,;\n]/.test(elements.tagInput.value)) commitTagInput();
+    if (/[,;\n]/.test(elements.tagInput.value)) {
+      commitTagInput();
+    } else {
+      renderDraftTagChips();
+      updateLiveAnalysis();
+    }
   });
 
   elements.saveButton.addEventListener("click", saveDraft);
@@ -2975,6 +3066,9 @@ function bindEvents() {
   elements.attachmentPanel?.addEventListener("dragover", handleDraftDragOver);
   elements.attachmentPanel?.addEventListener("dragleave", () => setAttachmentDropActive(false));
   elements.attachmentPanel?.addEventListener("drop", handleDraftDrop);
+  elements.capturePanel?.addEventListener("dragover", handleDraftDragOver);
+  elements.capturePanel?.addEventListener("dragleave", () => setAttachmentDropActive(false));
+  elements.capturePanel?.addEventListener("drop", handleDraftDrop);
   document.addEventListener("click", handleImagePreviewClick);
   elements.lightboxCloseButton?.addEventListener("click", closeImageLightbox);
   elements.imageLightbox?.addEventListener("click", (event) => {
