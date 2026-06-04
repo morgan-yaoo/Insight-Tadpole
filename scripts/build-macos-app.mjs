@@ -1,7 +1,10 @@
+import { execFile } from "node:child_process";
 import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
+const execFileAsync = promisify(execFile);
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const packageMeta = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
 const appVersion = packageMeta.version || "0.1.0";
@@ -16,6 +19,7 @@ const bundledAppRoot = join(resourcesRoot, "app");
 const runtimeSourceRoot = join(distRoot, "node-runtime");
 const bundledRuntimeRoot = join(resourcesRoot, "runtime");
 const launcherPath = join(macosRoot, "insight-tadpole");
+const launcherSourcePath = join(projectRoot, "scripts", "macos-launcher.m");
 
 await rm(appRoot, { recursive: true, force: true });
 if (!process.env.INSIGHT_TADPOLE_APP_ROOT) {
@@ -63,40 +67,7 @@ await writeFile(
 `
 );
 
-await writeFile(
-  launcherPath,
-  `#!/bin/zsh
-set -e
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$PATH"
-APP_DIR="$(cd "$(dirname "$0")/../Resources/app" && pwd)"
-NODE_BIN="$APP_DIR/../runtime/node"
-if [[ ! -x "$NODE_BIN" ]]; then
-  NODE_BIN="$(command -v node || true)"
-fi
-if [[ -z "$NODE_BIN" ]]; then
-  for candidate in /opt/homebrew/bin/node /usr/local/bin/node /usr/bin/node; do
-    if [[ -x "$candidate" ]]; then
-      NODE_BIN="$candidate"
-      break
-    fi
-  done
-fi
-if [[ -z "$NODE_BIN" ]]; then
-  osascript -e 'display dialog "Insight Tadpole needs Node.js to run. Install Node.js for Apple Silicon, then open the app again. If Node is already installed, make sure it is available at /opt/homebrew/bin/node or /usr/local/bin/node." buttons {"OK"} default button "OK" with icon caution'
-  exit 1
-fi
-cd "$APP_DIR"
-PORT="\${RESEARCH_ASSIST_PORT:-3214}"
-URL="http://localhost:$PORT"
-META_URL="http://127.0.0.1:$PORT/api/meta"
-if /usr/bin/curl -fsS "$META_URL" 2>/dev/null | /usr/bin/grep -q storageMode; then
-  /usr/bin/open "$URL"
-  exit 0
-fi
-"$NODE_BIN" scripts/serve.mjs --port "$PORT" --open
-`
-);
-
+await execFileAsync("clang", ["-fobjc-arc", "-framework", "Cocoa", launcherSourcePath, "-o", launcherPath]);
 await chmod(launcherPath, 0o755);
 
 console.log(`Built ${appRoot}`);

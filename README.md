@@ -2,7 +2,7 @@
 
 Insight Tadpole is a local-first research note app for capturing ideas, pasted paper excerpts, reading notes, source metadata, categories, subcategories, tags, and revisit queues. It is designed for researchers who want their note library to stay on their own Mac while still being searchable and automatically organized.
 
-Current release: `v0.1.3`
+Current release: `v0.2.0`
 
 Official repository: <https://github.com/morgan-yaoo/Insight-Tadpole>
 
@@ -126,7 +126,16 @@ dist/Insight Tadpole-Apple-Silicon.dmg
 dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
-The PKG is restricted to `arm64` and macOS 12.0 or later. The launcher includes an embedded Node runtime at `Contents/Resources/runtime/node`; if that runtime is missing, it falls back to an installed Node.js binary.
+The PKG is restricted to `arm64` and macOS 12.0 or later. The macOS app uses a native AppKit launcher that keeps Insight Tadpole visible in the Dock, opens the local web app, manages the local note server, and stops that server when the app quits. The launcher includes an embedded Node runtime at `Contents/Resources/runtime/node`; if that runtime is missing, it falls back to an installed Node.js binary.
+
+## Release 0.2.0
+
+- Replaced the shell-based macOS launcher with a native AppKit launcher.
+- Insight Tadpole now stays in the Dock with a normal running indicator after launch.
+- Fixed the latest app build so the Dock icon no longer keeps bouncing after the browser page opens.
+- The native launcher starts the embedded Node server, opens the local app page, and keeps the server tied to the app lifecycle.
+- Quitting Insight Tadpole from the Dock or app menu now terminates the local server process.
+- The release DMG and PKG include a native Apple Silicon app executable instead of a shell executable.
 
 ## Release 0.1.3
 
