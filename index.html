@@ -70,7 +70,7 @@
               <button id="pasteButton" class="icon-button" type="button" title="Paste from clipboard" aria-label="Paste from clipboard">
                 <span aria-hidden="true">⌘V</span>
               </button>
-              <button id="newButton" class="icon-button" type="button" title="New note" aria-label="New note">
+              <button id="newButton" class="icon-button" type="button" title="New blank note" aria-label="New blank note">
                 <span aria-hidden="true">+</span>
               </button>
             </div>
@@ -150,10 +150,15 @@
               <span>Subcategory</span>
               <select id="subcategorySelect"></select>
             </label>
-            <button id="saveButton" class="primary-button" type="button">
-              <span aria-hidden="true">✓</span>
-              Save Note
-            </button>
+            <div class="draft-action-group">
+              <button id="clearDraftButton" class="secondary-button clear-draft-button" type="button" title="Clear draft" aria-label="Clear draft">
+                Clear Draft
+              </button>
+              <button id="saveButton" class="primary-button" type="button">
+                <span aria-hidden="true">✓</span>
+                Save Note
+              </button>
+            </div>
           </div>
         </section>
 

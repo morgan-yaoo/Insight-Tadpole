@@ -146,6 +146,7 @@ const elements = {
   categoryNav: document.querySelector("#categoryNav"),
   categorySelect: document.querySelector("#categorySelect"),
   chooseStorageButton: document.querySelector("#chooseStorageButton"),
+  clearDraftButton: document.querySelector("#clearDraftButton"),
   clearFiltersButton: document.querySelector("#clearFiltersButton"),
   dataFolderPath: document.querySelector("#dataFolderPath"),
   defaultStorageButton: document.querySelector("#defaultStorageButton"),
@@ -1299,6 +1300,28 @@ function updateLiveAnalysis() {
   });
   renderDraftTagChips();
   renderDraftFormatPreview();
+  renderCaptureActions();
+}
+
+function draftHasContent() {
+  return Boolean(
+    elements.titleInput.value.trim() ||
+    elements.sourceInput.value.trim() ||
+    elements.venueInput.value.trim() ||
+    elements.yearInput.value.trim() ||
+    elements.bodyInput.value.trim() ||
+    elements.tagInput.value.trim() ||
+    state.draftTags.length ||
+    state.draftAttachments.length ||
+    normalizeNoteFormat(elements.formatSelect.value) !== "markdown" ||
+    state.editingId
+  );
+}
+
+function renderCaptureActions() {
+  if (!elements.clearDraftButton) return;
+  elements.clearDraftButton.textContent = state.editingId ? "Cancel Edit" : "Clear Draft";
+  elements.clearDraftButton.disabled = !draftHasContent();
 }
 
 function currentDraftTags(options = {}) {
@@ -2338,9 +2361,35 @@ function renderMarkdown(text) {
   return html.join("");
 }
 
+function sanitizeStyle(value) {
+  const allowedProperties = new Set([
+    "background-color",
+    "color",
+    "font-style",
+    "font-weight",
+    "text-align",
+    "text-decoration"
+  ]);
+  const safeColor = /^(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s]+\)|hsla?\([0-9.,%\s]+\)|[a-z]+)$/i;
+  const safeKeyword = /^[a-z -]+$/i;
+  const declarations = [];
+
+  String(value || "").split(";").forEach((declaration) => {
+    const [rawProperty, ...rawValueParts] = declaration.split(":");
+    const property = String(rawProperty || "").trim().toLowerCase();
+    const cssValue = rawValueParts.join(":").trim();
+    if (!allowedProperties.has(property) || !cssValue || /url\s*\(|expression\s*\(|javascript:/i.test(cssValue)) return;
+
+    const valueIsSafe = property.includes("color") ? safeColor.test(cssValue) : safeKeyword.test(cssValue);
+    if (valueIsSafe) declarations.push(property + ": " + cssValue);
+  });
+
+  return declarations.join("; ");
+}
+
 function sanitizeHtml(html) {
   const allowedTags = new Set(["a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"]);
-  const allowedAttrs = new Set(["alt", "colspan", "href", "rowspan", "src", "title"]);
+  const allowedAttrs = new Set(["alt", "colspan", "href", "rowspan", "src", "style", "title"]);
   const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
 
   [...doc.body.querySelectorAll("*")].forEach((element) => {
@@ -2354,6 +2403,15 @@ function sanitizeHtml(html) {
       const name = attr.name.toLowerCase();
       if (!allowedAttrs.has(name) && !name.startsWith("aria-")) element.removeAttribute(attr.name);
     });
+
+    if (element.hasAttribute("style")) {
+      const safeStyle = sanitizeStyle(element.getAttribute("style"));
+      if (safeStyle) {
+        element.setAttribute("style", safeStyle);
+      } else {
+        element.removeAttribute("style");
+      }
+    }
 
     if (tag === "a") {
       const href = element.getAttribute("href") || "";
@@ -2627,6 +2685,7 @@ async function clearDraft(options = {}) {
   renderSubcategorySelect();
   renderDraftAttachments();
   updateLiveAnalysis();
+  renderCaptureActions();
   const deletedImages = await deleteAttachmentsIfUnused(draftAttachmentsToDelete, { includeDraft: false });
   if (deletedImages) showToast(attachmentDeletionMessage(deletedImages).trim());
 }
@@ -3026,7 +3085,8 @@ function bindEvents() {
   });
 
   elements.saveButton.addEventListener("click", saveDraft);
-  elements.newButton.addEventListener("click", clearDraft);
+  elements.clearDraftButton.addEventListener("click", () => clearDraft());
+  elements.newButton.addEventListener("click", () => clearDraft());
   elements.addCategoryButton.addEventListener("click", addCategory);
   elements.categoryNameInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") addCategory();

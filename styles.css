@@ -1525,3 +1525,39 @@ textarea {
   padding: 10px;
   text-align: center;
 }
+
+/* Clear draft capture action */
+.clear-draft-button {
+  min-height: 42px;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.clear-draft-button:disabled {
+  opacity: 0.48;
+}
+
+/* Draft action group */
+.draft-action-group {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.draft-action-group .primary-button,
+.draft-action-group .secondary-button {
+  min-height: 42px;
+}
+
+@media (max-width: 820px) {
+  .draft-action-group {
+    justify-content: stretch;
+  }
+
+  .draft-action-group .primary-button,
+  .draft-action-group .secondary-button {
+    width: 100%;
+  }
+}
