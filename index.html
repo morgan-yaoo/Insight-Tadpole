@@ -17,6 +17,9 @@
             <p id="libraryCount">0 notes</p>
           </div>
         </div>
+        <a class="github-link" href="https://github.com/morgan-yaoo/Insight-Tadpole" target="_blank" rel="noreferrer">
+          Official GitHub
+        </a>
 
         <div class="section-label partition-label">Sections</div>
         <nav class="page-nav" aria-label="Sections">
@@ -82,10 +85,23 @@
               <span>Source</span>
               <input id="sourceInput" autocomplete="off" placeholder="Paper, author, DOI, or URL" />
             </label>
+            <label class="field">
+              <span>Conference / Journal</span>
+              <input id="venueInput" autocomplete="off" placeholder="CHI, NeurIPS, Nature, arXiv" />
+            </label>
+            <label class="field year-field">
+              <span>Year</span>
+              <input id="yearInput" inputmode="numeric" autocomplete="off" placeholder="2026" />
+            </label>
           </div>
 
           <label class="field note-body-field">
             <span>Note</span>
+            <select id="formatSelect" class="format-select" aria-label="Note format">
+              <option value="markdown">Markdown</option>
+              <option value="html">HTML</option>
+              <option value="plain">Plain Text</option>
+            </select>
             <textarea id="bodyInput" spellcheck="true" placeholder="Write an idea, paste an abstract, or collect a passage from a paper."></textarea>
           </label>
 
@@ -115,7 +131,8 @@
           <div class="tag-editor">
             <label class="field">
               <span>Tags</span>
-              <input id="tagInput" autocomplete="off" placeholder="theory, replication, methods" />
+              <input id="tagInput" autocomplete="off" placeholder="Add tags with comma or Enter" />
+              <div id="draftTagChips" class="draft-tag-chips" aria-live="polite"></div>
             </label>
             <label class="field category-select-field">
               <span>Category</span>
@@ -298,6 +315,11 @@
     </div>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <div id="imageLightbox" class="image-lightbox" hidden>
+      <button id="lightboxCloseButton" class="lightbox-close" type="button" aria-label="Close image preview">×</button>
+      <img id="lightboxImage" alt="" />
+      <div id="lightboxCaption" class="lightbox-caption"></div>
+    </div>
     <script src="app.js" defer></script>
   </body>
 </html>

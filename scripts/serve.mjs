@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { createReadStream, existsSync, readFileSync } from "node:fs";
-import { cp, mkdir, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { basename, extname, join, normalize, resolve } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -265,6 +265,9 @@ function noteToMarkdown(note) {
     `- Category: ${note.categoryName || titleCase(note.category || "Inbox")}`,
     `- Subcategory: ${note.subcategoryName || titleCase(note.subcategory || "") || "None"}`,
     `- Source: ${note.source || "None"}`,
+    `- Conference / Journal: ${note.venue || "None"}`,
+    `- Year: ${note.year || "None"}`,
+    `- Format: ${note.format || "markdown"}`,
     `- Tags: ${(note.tags || []).join(", ") || "None"}`,
     `- Review Count: ${note.reviewCount || 0}`,
     `- Last Reviewed: ${note.lastReviewedAt ? new Date(note.lastReviewedAt).toISOString() : "Never"}`,
@@ -352,6 +355,24 @@ function safeAttachmentRequestName(value) {
 
 function attachmentFilePath(filename) {
   return join(attachmentsDirPath(), filename);
+}
+
+async function uniqueAttachmentFilename(baseName, extension, currentFilename = "") {
+  const safeBase = safeName(baseName || "image");
+  let candidate = safeBase + extension;
+  let attempts = 0;
+  while (candidate !== currentFilename && existsSync(attachmentFilePath(candidate))) {
+    attempts += 1;
+    candidate = safeBase + "-" + randomUUID().slice(0, 8) + extension;
+    if (attempts > 20) throw new Error("Could not find an available attachment filename");
+  }
+  return candidate;
+}
+
+function renamedAttachmentBase(title, index) {
+  const stem = safeName(title || "note");
+  const position = Number(index) > 0 ? Number(index) : 1;
+  return stem + "-image-" + position;
 }
 
 function markdownLabel(value) {
@@ -464,6 +485,59 @@ async function handleApi(request, response, requestUrl) {
         ok: true,
         deleted,
         filename,
+        ...storagePaths()
+      });
+      return;
+    }
+
+    if (request.method === "POST" && requestUrl.pathname === "/api/attachments/rename") {
+      const body = await readJsonBody(request);
+      const filename = safeAttachmentRequestName(body?.filename);
+      if (!filename) {
+        sendJson(response, 400, { error: "Expected an attachment filename" });
+        return;
+      }
+
+      await ensureStorage();
+      const currentPath = attachmentFilePath(filename);
+      if (!existsSync(currentPath)) {
+        sendJson(response, 404, { error: "Attachment not found" });
+        return;
+      }
+
+      const extension = attachmentExtension(filename, body?.type);
+      const base = renamedAttachmentBase(body?.title || body?.name || "note", body?.index);
+      const currentStem = safeName(basename(filename, extname(filename)));
+      if (currentStem === base || currentStem.startsWith(base + "-")) {
+        sendJson(response, 200, {
+          ok: true,
+          renamed: false,
+          attachment: {
+            name: filename,
+            filename,
+            path: displayPath(currentPath),
+            url: attachmentUrl(filename)
+          },
+          ...storagePaths()
+        });
+        return;
+      }
+
+      const nextFilename = await uniqueAttachmentFilename(base, extension, filename);
+      const nextPath = attachmentFilePath(nextFilename);
+      if (nextFilename !== filename) {
+        await rename(currentPath, nextPath);
+      }
+
+      sendJson(response, 200, {
+        ok: true,
+        renamed: nextFilename !== filename,
+        attachment: {
+          name: nextFilename,
+          filename: nextFilename,
+          path: displayPath(nextPath),
+          url: attachmentUrl(nextFilename)
+        },
         ...storagePaths()
       });
       return;

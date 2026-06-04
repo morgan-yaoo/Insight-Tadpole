@@ -92,6 +92,11 @@ These local artifacts are unsigned and not notarized, so Gatekeeper may show a w
 ## Features
 
 - Capture notes, excerpts, paper references, and research questions.
+- Add images with the file picker, drag-and-drop, or clipboard paste.
+- Store optional conference/journal and year metadata for paper notes.
+- Write notes in Markdown, HTML, or plain text.
+- Click any image thumbnail to open a full-screen preview.
+- Image files are renamed from the note title when saved.
 - Revisit existing notes with a Review queue, reviewed/later scheduling, and review-log reflections.
 - Automatic category suggestions for ideas, literature notes, methods, evidence, questions, quotes, and tasks.
 - Editable custom categories with saved names, colors, and nested subcategories.

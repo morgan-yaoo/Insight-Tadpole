@@ -137,6 +137,7 @@ const stopWords = new Set([
 const elements = {
   activeFilters: document.querySelector("#activeFilters"),
   addCategoryButton: document.querySelector("#addCategoryButton"),
+  attachmentPanel: document.querySelector(".attachment-panel"),
   attachmentPreview: document.querySelector("#attachmentPreview"),
   bodyInput: document.querySelector("#bodyInput"),
   categoryColorInput: document.querySelector("#categoryColorInput"),
@@ -150,9 +151,15 @@ const elements = {
   exportJsonButton: document.querySelector("#exportJsonButton"),
   exportMarkdownButton: document.querySelector("#exportMarkdownButton"),
   exportsFolderPath: document.querySelector("#exportsFolderPath"),
+  draftTagChips: document.querySelector("#draftTagChips"),
+  formatSelect: document.querySelector("#formatSelect"),
   importInput: document.querySelector("#importInput"),
   imageInput: document.querySelector("#imageInput"),
   libraryCount: document.querySelector("#libraryCount"),
+  lightboxCaption: document.querySelector("#lightboxCaption"),
+  lightboxCloseButton: document.querySelector("#lightboxCloseButton"),
+  lightboxImage: document.querySelector("#lightboxImage"),
+  imageLightbox: document.querySelector("#imageLightbox"),
   newButton: document.querySelector("#newButton"),
   notesFilePath: document.querySelector("#notesFilePath"),
   notesList: document.querySelector("#notesList"),
@@ -191,7 +198,9 @@ const elements = {
   tagCloud: document.querySelector("#tagCloud"),
   tagInput: document.querySelector("#tagInput"),
   titleInput: document.querySelector("#titleInput"),
-  toast: document.querySelector("#toast")
+  toast: document.querySelector("#toast"),
+  venueInput: document.querySelector("#venueInput"),
+  yearInput: document.querySelector("#yearInput")
 };
 
 let state = {
@@ -614,7 +623,10 @@ function normalizeNote(note) {
     id: note.id || crypto.randomUUID(),
     title,
     source: String(note.source || "").trim(),
+    venue: String(note.venue || "").trim(),
+    year: normalizeYear(note.year),
     body: text,
+    format: normalizeNoteFormat(note.format),
     category,
     subcategory,
     tags: normalizeTags(note.tags || analysis.tags),
@@ -754,8 +766,20 @@ function suggestTags(rawText) {
   return normalizeTags([...directMatches, ...properPhrases, ...frequentWords]).slice(0, 8);
 }
 
+function normalizeNoteFormat(format) {
+  const normalized = String(format || "markdown").trim().toLowerCase();
+  return ["markdown", "html", "plain"].includes(normalized) ? normalized : "markdown";
+}
+
+function normalizeYear(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const match = raw.match(/(?:19|20)\d{2}/);
+  return match ? match[0] : raw.slice(0, 16);
+}
+
 function normalizeTags(tags) {
-  const list = Array.isArray(tags) ? tags : String(tags || "").split(",");
+  const list = Array.isArray(tags) ? tags : String(tags || "").split(/[,;\n]+/);
   const seen = new Set();
   return list
     .map((tag) => String(tag).trim().toLowerCase().replace(/\s+/g, " "))
@@ -874,6 +898,54 @@ async function deleteQueuedAttachments() {
   return deleteAttachmentsIfUnused(queued, { includeDraft: false });
 }
 
+function attachmentReferencedOutsideNote(noteId, attachment) {
+  const normalized = normalizeAttachment(attachment);
+  return state.notes.some((note) =>
+    note.id !== noteId && normalizeAttachments(note.attachments).some((item) => sameAttachment(item, normalized))
+  );
+}
+
+async function renameAttachmentsForNote(note) {
+  if (state.storage.mode !== "files" || !note?.attachments?.length) return 0;
+  let renamed = 0;
+  const nextAttachments = [];
+  const contextTitle = note.title || note.source || "note";
+
+  for (const [index, attachment] of normalizeAttachments(note.attachments).entries()) {
+    if (!attachment.filename || attachmentReferencedOutsideNote(note.id, attachment)) {
+      nextAttachments.push(attachment);
+      continue;
+    }
+
+    try {
+      const result = await apiPost("/api/attachments/rename", {
+        filename: attachment.filename,
+        title: contextTitle,
+        index: index + 1,
+        name: attachment.name,
+        type: attachment.type
+      });
+      if (result.renamed && result.attachment) {
+        nextAttachments.push(normalizeAttachment({ ...attachment, ...result.attachment }));
+        renamed += 1;
+      } else {
+        nextAttachments.push(attachment);
+      }
+      state.storage.attachmentsDir = result.attachmentsDir || state.storage.attachmentsDir;
+    } catch {
+      nextAttachments.push(attachment);
+    }
+  }
+
+  note.attachments = nextAttachments;
+  state.draftAttachments = nextAttachments.map(normalizeAttachment);
+  return renamed;
+}
+
+function attachmentRenameMessage(count) {
+  return count ? " " + count + " image " + (count === 1 ? "file" : "files") + " renamed." : "";
+}
+
 function attachmentDeletionMessage(count) {
   return count ? " " + count + " image " + (count === 1 ? "file" : "files") + " removed." : "";
 }
@@ -884,12 +956,16 @@ function renderAttachmentGrid(attachments, className = "") {
   const modifier = className ? " " + className : "";
   return "<div class=\"attachment-grid" + modifier + "\">" +
     items
-      .map((attachment) =>
-        "<figure class=\"attachment-thumb\">" +
-          "<img src=\"" + escapeHtml(attachmentSource(attachment)) + "\" alt=\"" + escapeHtml(attachment.name) + "\" loading=\"lazy\" />" +
-          "<figcaption>" + escapeHtml(attachment.name) + "</figcaption>" +
-        "</figure>"
-      )
+      .map((attachment) => {
+        const src = attachmentSource(attachment);
+        const name = attachment.name;
+        return "<figure class=\"attachment-thumb\">" +
+          "<button class=\"attachment-preview-button\" type=\"button\" data-image-preview=\"" + escapeHtml(src) + "\" data-image-caption=\"" + escapeHtml(name) + "\">" +
+            "<img src=\"" + escapeHtml(src) + "\" alt=\"" + escapeHtml(name) + "\" loading=\"lazy\" />" +
+          "</button>" +
+          "<figcaption>" + escapeHtml(name) + "</figcaption>" +
+        "</figure>";
+      })
       .join("") +
     "</div>";
 }
@@ -933,13 +1009,56 @@ async function imageFileToAttachment(file) {
   });
 }
 
-async function addImagesToDraft(event) {
-  const files = [...(event.target.files || [])];
-  event.target.value = "";
-  if (!files.length) return;
+function imageFilesFromFileList(fileList) {
+  return [...(fileList || [])].filter((file) => file?.type?.startsWith("image/"));
+}
+
+function imageFilesFromDataTransfer(dataTransfer) {
+  const itemFiles = [...(dataTransfer?.items || [])]
+    .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+    .map((item) => item.getAsFile())
+    .filter(Boolean);
+  return itemFiles.length ? itemFiles : imageFilesFromFileList(dataTransfer?.files);
+}
+
+function clipboardImageName(type) {
+  const extension = {
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "image/heic": "heic",
+    "image/heif": "heif",
+    "image/bmp": "bmp",
+    "image/tiff": "tiff"
+  }[String(type || "").toLowerCase()] || "png";
+  return "clipboard-image-" + Date.now() + "." + extension;
+}
+
+async function clipboardItemToFile(item) {
+  const type = item.types.find((candidate) => candidate.startsWith("image/"));
+  if (!type) return null;
+  const blob = await item.getType(type);
+  return new File([blob], clipboardImageName(blob.type || type), { type: blob.type || type });
+}
+
+async function pasteImagesFromNavigatorClipboard() {
+  if (!navigator.clipboard?.read) return 0;
+  const items = await navigator.clipboard.read();
+  const files = [];
+  for (const item of items) {
+    const file = await clipboardItemToFile(item);
+    if (file) files.push(file);
+  }
+  return addImageFilesToDraft(files);
+}
+
+async function addImageFilesToDraft(files) {
+  const imageFiles = imageFilesFromFileList(files);
+  if (!imageFiles.length) return 0;
 
   let added = 0;
-  for (const file of files) {
+  for (const file of imageFiles) {
     try {
       const attachment = await imageFileToAttachment(file);
       state.draftAttachments = [...state.draftAttachments, attachment];
@@ -951,6 +1070,40 @@ async function addImagesToDraft(event) {
 
   renderDraftAttachments();
   if (added) showToast(added + " " + (added === 1 ? "image" : "images") + " added");
+  return added;
+}
+
+async function addImagesToDraft(event) {
+  const files = imageFilesFromFileList(event.target.files);
+  event.target.value = "";
+  await addImageFilesToDraft(files);
+}
+
+async function handleDraftPaste(event) {
+  const files = imageFilesFromDataTransfer(event.clipboardData);
+  if (!files.length) return;
+  event.preventDefault();
+  await addImageFilesToDraft(files);
+}
+
+function setAttachmentDropActive(active) {
+  elements.attachmentPanel?.classList.toggle("drag-over", Boolean(active));
+}
+
+function handleDraftDragOver(event) {
+  const hasImages = imageFilesFromDataTransfer(event.dataTransfer).length > 0;
+  if (!hasImages) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+  setAttachmentDropActive(true);
+}
+
+async function handleDraftDrop(event) {
+  const files = imageFilesFromDataTransfer(event.dataTransfer);
+  if (!files.length) return;
+  event.preventDefault();
+  setAttachmentDropActive(false);
+  await addImageFilesToDraft(files);
 }
 
 async function removeDraftAttachment(id) {
@@ -978,7 +1131,7 @@ function renderDraftAttachments() {
   if (!attachments.length) {
     const empty = document.createElement("div");
     empty.className = "attachment-empty";
-    empty.textContent = "No images attached";
+    empty.textContent = "Drop images here or paste from clipboard";
     elements.attachmentPreview.append(empty);
     return;
   }
@@ -987,10 +1140,17 @@ function renderDraftAttachments() {
     const card = document.createElement("figure");
     card.className = "draft-attachment-card";
 
+    const previewButton = document.createElement("button");
+    previewButton.type = "button";
+    previewButton.className = "attachment-preview-button";
+    previewButton.dataset.imagePreview = attachmentSource(attachment);
+    previewButton.dataset.imageCaption = attachment.name;
+
     const image = document.createElement("img");
     image.src = attachmentSource(attachment);
     image.alt = attachment.name;
     image.loading = "lazy";
+    previewButton.append(image);
 
     const caption = document.createElement("figcaption");
     caption.textContent = attachment.name;
@@ -1003,7 +1163,7 @@ function renderDraftAttachments() {
     removeButton.textContent = "×";
     removeButton.addEventListener("click", () => removeDraftAttachment(attachment.id));
 
-    card.append(image, caption, removeButton);
+    card.append(previewButton, caption, removeButton);
     elements.attachmentPreview.append(card);
   });
 }
@@ -1046,7 +1206,7 @@ function deriveTitle(text) {
 }
 
 function currentDraftText() {
-  return `${elements.titleInput.value}\n${elements.sourceInput.value}\n${elements.bodyInput.value}`;
+  return `${elements.titleInput.value}\n${elements.sourceInput.value}\n${elements.venueInput?.value || ""}\n${elements.yearInput?.value || ""}\n${elements.bodyInput.value}`;
 }
 
 function updateLiveAnalysis() {
@@ -1083,14 +1243,44 @@ function updateLiveAnalysis() {
     button.addEventListener("click", () => toggleTagInDraft(tag));
     elements.suggestedTags.append(button);
   });
+  renderDraftTagChips();
+}
+
+function setDraftTags(tags) {
+  elements.tagInput.value = normalizeTags(tags).join(", ");
+  renderDraftTagChips();
+}
+
+function commitTagInput() {
+  setDraftTags(elements.tagInput.value);
+  updateLiveAnalysis();
+}
+
+function removeTagFromDraft(tag) {
+  setDraftTags(normalizeTags(elements.tagInput.value).filter((item) => item !== tag));
+  updateLiveAnalysis();
 }
 
 function toggleTagInDraft(tag) {
   const tags = normalizeTags(elements.tagInput.value);
-  elements.tagInput.value = tags.includes(tag)
-    ? tags.filter((item) => item !== tag).join(", ")
-    : [...tags, tag].join(", ");
+  setDraftTags(tags.includes(tag)
+    ? tags.filter((item) => item !== tag)
+    : [...tags, tag]);
   updateLiveAnalysis();
+}
+
+function renderDraftTagChips() {
+  if (!elements.draftTagChips) return;
+  elements.draftTagChips.innerHTML = "";
+  normalizeTags(elements.tagInput.value).forEach((tag) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "draft-tag-chip";
+    button.title = "Remove " + tag;
+    button.textContent = tag + " ×";
+    button.addEventListener("click", () => removeTagFromDraft(tag));
+    elements.draftTagChips.append(button);
+  });
 }
 
 function render() {
@@ -1537,11 +1727,11 @@ function renderCurrentReviewNote() {
   }
   elements.reviewCurrentTitle.textContent = note.title;
   elements.reviewCurrentMeta.textContent = [
-    note.source || "No source",
+    noteSourceLabel(note),
     `Updated ${formatDate(note.updatedAt)}`,
     reviewScheduleLabel(note)
   ].join(" · ");
-  elements.reviewCurrentBody.innerHTML = `<div class="detail-body-text">${escapeHtml(noteBodyWithReviewLog(note))}</div>${renderAttachmentGrid(note.attachments, "review-attachments")}`;
+  elements.reviewCurrentBody.innerHTML = `<div class="rich-note-body">${renderNoteContent(note, { includeReviewLog: true })}</div>${renderAttachmentGrid(note.attachments, "review-attachments")}`;
   elements.reviewReflectionInput.value = "";
   elements.reviewCurrentTags.innerHTML = "";
   note.tags.forEach((tag) => {
@@ -1926,6 +2116,202 @@ async function deleteCategory(id) {
   showToast("Category deleted");
 }
 
+function noteSourceLabel(note) {
+  const parts = [note.source, note.venue, note.year]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+  return parts.length ? parts.join(" · ") : "No source";
+}
+
+function notePlainBody(note) {
+  const body = String(note.body || "");
+  if (normalizeNoteFormat(note.format) !== "html") return body;
+  try {
+    const parsed = new DOMParser().parseFromString(body, "text/html");
+    return parsed.body.textContent || "";
+  } catch {
+    return body.replace(/<[^>]+>/g, " ");
+  }
+}
+
+function isSafeContentUrl(value, image = false) {
+  const raw = String(value || "").trim().replaceAll("&amp;", "&");
+  if (!raw) return false;
+  if (image && raw.startsWith("data:image/")) return true;
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (["http:", "https:"].includes(url.protocol)) return true;
+    return url.origin === window.location.origin && url.pathname.startsWith("/attachments/");
+  } catch {
+    return raw.startsWith("/attachments/");
+  }
+}
+
+function renderPlainText(text) {
+  const escaped = escapeHtml(text || "");
+  if (!escaped.trim()) return "";
+  return "<p>" + escaped.replace(/\n{2,}/g, "</p><p>").replace(/\n/g, "<br>") + "</p>";
+}
+
+function renderInlineMarkdown(text) {
+  let html = escapeHtml(text || "");
+  html = html.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_match, alt, src) => {
+    const cleanSrc = String(src || "").replaceAll("&amp;", "&");
+    if (!isSafeContentUrl(cleanSrc, true)) return escapeHtml(alt || "Image");
+    const label = alt || "Image";
+    return '<img src="' + escapeHtml(cleanSrc) + '" alt="' + escapeHtml(label) + '" loading="lazy" data-image-preview="' + escapeHtml(cleanSrc) + '" data-image-caption="' + escapeHtml(label) + '" />';
+  });
+  html = html.replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, label, href) => {
+    const cleanHref = String(href || "").replaceAll("&amp;", "&");
+    if (!isSafeContentUrl(cleanHref)) return escapeHtml(label);
+    return '<a href="' + escapeHtml(cleanHref) + '" target="_blank" rel="noreferrer">' + label + '</a>';
+  });
+  html = html.replace(/\x60([^\x60]+)\x60/g, "<code>$1</code>");
+  html = html.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  return html;
+}
+
+function renderMarkdown(text) {
+  const lines = String(text || "").replace(/\r\n/g, "\n").split("\n");
+  const html = [];
+  let listType = "";
+  let inCode = false;
+  let codeLines = [];
+
+  const closeList = () => {
+    if (listType) {
+      html.push("</" + listType + ">");
+      listType = "";
+    }
+  };
+
+  for (const line of lines) {
+    if (/^\x60\x60\x60/.test(line.trim())) {
+      if (inCode) {
+        html.push("<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>");
+        codeLines = [];
+        inCode = false;
+      } else {
+        closeList();
+        inCode = true;
+      }
+      continue;
+    }
+
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+
+    if (!line.trim()) {
+      closeList();
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      closeList();
+      html.push("<h" + heading[1].length + ">" + renderInlineMarkdown(heading[2]) + "</h" + heading[1].length + ">");
+      continue;
+    }
+
+    const unordered = line.match(/^[-*]\s+(.+)$/);
+    if (unordered) {
+      if (listType !== "ul") {
+        closeList();
+        listType = "ul";
+        html.push("<ul>");
+      }
+      html.push("<li>" + renderInlineMarkdown(unordered[1]) + "</li>");
+      continue;
+    }
+
+    const ordered = line.match(/^\d+\.\s+(.+)$/);
+    if (ordered) {
+      if (listType !== "ol") {
+        closeList();
+        listType = "ol";
+        html.push("<ol>");
+      }
+      html.push("<li>" + renderInlineMarkdown(ordered[1]) + "</li>");
+      continue;
+    }
+
+    const quote = line.match(/^>\s?(.+)$/);
+    if (quote) {
+      closeList();
+      html.push("<blockquote>" + renderInlineMarkdown(quote[1]) + "</blockquote>");
+      continue;
+    }
+
+    closeList();
+    html.push("<p>" + renderInlineMarkdown(line) + "</p>");
+  }
+
+  if (inCode) html.push("<pre><code>" + escapeHtml(codeLines.join("\n")) + "</code></pre>");
+  closeList();
+  return html.join("");
+}
+
+function sanitizeHtml(html) {
+  const allowedTags = new Set(["a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4", "h5", "h6", "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "table", "tbody", "td", "th", "thead", "tr", "ul"]);
+  const allowedAttrs = new Set(["alt", "colspan", "href", "rowspan", "src", "title"]);
+  const doc = new DOMParser().parseFromString(String(html || ""), "text/html");
+
+  [...doc.body.querySelectorAll("*")].forEach((element) => {
+    const tag = element.tagName.toLowerCase();
+    if (!allowedTags.has(tag)) {
+      element.replaceWith(...element.childNodes);
+      return;
+    }
+
+    [...element.attributes].forEach((attr) => {
+      const name = attr.name.toLowerCase();
+      if (!allowedAttrs.has(name) && !name.startsWith("aria-")) element.removeAttribute(attr.name);
+    });
+
+    if (tag === "a") {
+      const href = element.getAttribute("href") || "";
+      if (!isSafeContentUrl(href)) {
+        element.removeAttribute("href");
+      } else {
+        element.setAttribute("target", "_blank");
+        element.setAttribute("rel", "noreferrer");
+      }
+    }
+
+    if (tag === "img") {
+      const src = element.getAttribute("src") || "";
+      if (!isSafeContentUrl(src, true)) {
+        element.remove();
+      } else {
+        const caption = element.getAttribute("alt") || element.getAttribute("title") || "Image";
+        element.setAttribute("loading", "lazy");
+        element.setAttribute("data-image-preview", src);
+        element.setAttribute("data-image-caption", caption);
+      }
+    }
+  });
+
+  return doc.body.innerHTML;
+}
+
+function renderReviewLogHtml(note) {
+  if (!note.reviewLog?.length) return "";
+  const items = note.reviewLog
+    .map((entry) => "<li><strong>" + escapeHtml(formatDate(entry.at)) + ":</strong> " + escapeHtml(entry.text) + "</li>")
+    .join("");
+  return "<h2>Review Log</h2><ul>" + items + "</ul>";
+}
+
+function renderNoteContent(note, options = {}) {
+  const format = normalizeNoteFormat(note.format);
+  const body = String(note.body || "");
+  const content = format === "html" ? sanitizeHtml(body) : format === "plain" ? renderPlainText(body) : renderMarkdown(body);
+  return (content || "<p></p>") + (options.includeReviewLog ? renderReviewLogHtml(note) : "");
+}
+
 function renderActiveFilters() {
   elements.activeFilters.innerHTML = "";
   const filters = [];
@@ -1983,7 +2369,7 @@ function getFilteredNotes() {
       const subcategoryName = getNoteSubcategory(note)?.name || "";
       const reviewText = (note.reviewLog || []).map((entry) => entry.text).join(" ");
       const attachmentText = (note.attachments || []).map((attachment) => attachment.name).join(" ");
-      const haystack = [note.title, note.source, note.body, reviewText, attachmentText, categoryName, subcategoryName, ...note.tags]
+      const haystack = [note.title, note.source, note.venue, note.year, notePlainBody(note), reviewText, attachmentText, categoryName, subcategoryName, ...note.tags]
         .join(" ")
         .toLowerCase();
       return haystack.includes(search);
@@ -2036,16 +2422,16 @@ function renderNotes() {
         ${subcategoryMarkup}
       </div>
       <div class="note-times">
-        <div class="note-source">${escapeHtml(note.source || "No source")}</div>
+        <div class="note-source">${escapeHtml(noteSourceLabel(note))}</div>
         <div class="note-date">Created ${formatDate(note.createdAt)}</div>
         <div class="note-date">Updated ${formatDate(note.updatedAt)}</div>
       </div>
       <div class="note-tags">${tagMarkup}</div>
-      <p class="note-excerpt">${escapeHtml(excerpt(note.body, 180))}</p>
+      <p class="note-excerpt">${escapeHtml(excerpt(notePlainBody(note), 180))}</p>
       ${attachmentMarkup}
       <details class="note-card-details">
         <summary>Full Note</summary>
-        <div class="note-card-body">${escapeHtml(noteBodyWithReviewLog(note))}</div>
+        <div class="note-card-body rich-note-body">${renderNoteContent(note, { includeReviewLog: true })}</div>
       </details>
       <div class="note-card-actions">
         <button class="secondary-button" type="button" data-note-action="edit">Edit</button>
@@ -2086,7 +2472,10 @@ async function saveDraft() {
   const draft = {
     title,
     source: elements.sourceInput.value.trim(),
+    venue: elements.venueInput.value.trim(),
+    year: normalizeYear(elements.yearInput.value),
     body,
+    format: normalizeNoteFormat(elements.formatSelect.value),
     category,
     subcategory,
     tags: normalizeTags(elements.tagInput.value || analysis.tags),
@@ -2094,6 +2483,7 @@ async function saveDraft() {
   };
 
   let saveMessage = "";
+  let renamedImages = 0;
 
   if (state.editingId) {
     const index = state.notes.findIndex((note) => note.id === state.editingId);
@@ -2103,6 +2493,7 @@ async function saveDraft() {
         ...draft,
         updatedAt: Date.now()
       };
+      renamedImages = await renameAttachmentsForNote(state.notes[index]);
       state.selectedId = state.notes[index].id;
     }
     state.editingId = null;
@@ -2116,6 +2507,7 @@ async function saveDraft() {
       updatedAt: Date.now()
     });
     state.notes.unshift(note);
+    renamedImages = await renameAttachmentsForNote(note);
     state.selectedId = note.id;
     saveMessage = "Note saved and sorted";
   }
@@ -2125,7 +2517,7 @@ async function saveDraft() {
   await clearDraft({ deleteDraftImages: false });
   state.activePage = "library";
   render();
-  showToast(saveMessage + attachmentDeletionMessage(deletedImages));
+  showToast(saveMessage + attachmentRenameMessage(renamedImages) + attachmentDeletionMessage(deletedImages));
 }
 
 async function clearDraft(options = {}) {
@@ -2142,6 +2534,9 @@ async function clearDraft(options = {}) {
   elements.titleInput.value = "";
   elements.sourceInput.value = "";
   elements.bodyInput.value = "";
+  elements.formatSelect.value = "markdown";
+  elements.venueInput.value = "";
+  elements.yearInput.value = "";
   elements.tagInput.value = "";
   elements.categorySelect.value = getFallbackCategory().id;
   renderSubcategorySelect();
@@ -2164,7 +2559,10 @@ function editNote(id) {
   state.originalDraftAttachmentKeys = new Set(state.draftAttachments.map(attachmentDeleteKey));
   elements.titleInput.value = note.title;
   elements.sourceInput.value = note.source;
+  elements.venueInput.value = note.venue || "";
+  elements.yearInput.value = note.year || "";
   elements.bodyInput.value = note.body;
+  elements.formatSelect.value = normalizeNoteFormat(note.format);
   elements.tagInput.value = note.tags.join(", ");
   elements.categorySelect.value = note.category;
   renderSubcategorySelect();
@@ -2205,6 +2603,13 @@ async function copyNote(id) {
 }
 
 async function pasteFromClipboard() {
+  try {
+    const imageCount = await pasteImagesFromNavigatorClipboard();
+    if (imageCount) return;
+  } catch {
+    // Some browsers expose text clipboard access but not image clipboard access.
+  }
+
   try {
     const text = await navigator.clipboard.readText();
     elements.bodyInput.value = elements.bodyInput.value ? `${elements.bodyInput.value}\n\n${text}` : text;
@@ -2273,6 +2678,9 @@ function noteToMarkdown(note) {
     `- Category: ${category}`,
     `- Subcategory: ${subcategory || "None"}`,
     `- Source: ${note.source || "None"}`,
+    `- Conference / Journal: ${note.venue || "None"}`,
+    `- Year: ${note.year || "None"}`,
+    `- Format: ${normalizeNoteFormat(note.format)}`,
     `- Tags: ${note.tags.join(", ") || "None"}`,
     `- Review Count: ${note.reviewCount || 0}`,
     `- Last Reviewed: ${note.lastReviewedAt ? new Date(note.lastReviewedAt).toISOString() : "Never"}`,
@@ -2485,13 +2893,45 @@ function showToast(message) {
   showToast.timeout = window.setTimeout(() => elements.toast.classList.remove("show"), 2200);
 }
 
+function openImageLightbox(src, caption = "Image") {
+  if (!elements.imageLightbox || !src) return;
+  elements.lightboxImage.src = src;
+  elements.lightboxImage.alt = caption;
+  elements.lightboxCaption.textContent = caption;
+  elements.imageLightbox.hidden = false;
+}
+
+function closeImageLightbox() {
+  if (!elements.imageLightbox) return;
+  elements.imageLightbox.hidden = true;
+  elements.lightboxImage.removeAttribute("src");
+}
+
+function handleImagePreviewClick(event) {
+  const trigger = event.target.closest("[data-image-preview]");
+  if (!trigger) return;
+  event.preventDefault();
+  openImageLightbox(trigger.dataset.imagePreview, trigger.dataset.imageCaption || trigger.getAttribute("alt") || "Image");
+}
+
 function bindEvents() {
   document.querySelectorAll("[data-page-button]").forEach((button) => {
     button.addEventListener("click", () => setPage(button.dataset.pageButton));
   });
 
-  [elements.titleInput, elements.sourceInput, elements.bodyInput, elements.tagInput].forEach((input) => {
+  [elements.titleInput, elements.sourceInput, elements.venueInput, elements.yearInput, elements.bodyInput, elements.tagInput].forEach((input) => {
     input.addEventListener("input", updateLiveAnalysis);
+  });
+  elements.formatSelect.addEventListener("change", updateLiveAnalysis);
+  elements.tagInput.addEventListener("blur", commitTagInput);
+  elements.tagInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitTagInput();
+    }
+  });
+  elements.tagInput.addEventListener("input", () => {
+    if (/[,;\n]/.test(elements.tagInput.value)) commitTagInput();
   });
 
   elements.saveButton.addEventListener("click", saveDraft);
@@ -2530,6 +2970,16 @@ function bindEvents() {
   elements.exportMarkdownButton.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importJson);
   elements.imageInput?.addEventListener("change", addImagesToDraft);
+  elements.bodyInput.addEventListener("paste", handleDraftPaste);
+  elements.attachmentPanel?.addEventListener("paste", handleDraftPaste);
+  elements.attachmentPanel?.addEventListener("dragover", handleDraftDragOver);
+  elements.attachmentPanel?.addEventListener("dragleave", () => setAttachmentDropActive(false));
+  elements.attachmentPanel?.addEventListener("drop", handleDraftDrop);
+  document.addEventListener("click", handleImagePreviewClick);
+  elements.lightboxCloseButton?.addEventListener("click", closeImageLightbox);
+  elements.imageLightbox?.addEventListener("click", (event) => {
+    if (event.target === elements.imageLightbox) closeImageLightbox();
+  });
   elements.openStorageButton.addEventListener("click", openStorageFolder);
   elements.chooseStorageButton.addEventListener("click", chooseStorageFolder);
   elements.defaultStorageButton.addEventListener("click", useDefaultStorageFolder);
@@ -2540,6 +2990,10 @@ function bindEvents() {
   });
 
   document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.imageLightbox?.hidden) {
+      closeImageLightbox();
+      return;
+    }
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
       event.preventDefault();
       if (state.activePage === "review") {
