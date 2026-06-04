@@ -16,6 +16,8 @@ const pressureNoteCount = Number(process.env.PRESSURE_NOTES || 1000);
 const pressureWriteCycles = Number(process.env.PRESSURE_WRITE_CYCLES || 3);
 const dataDir = await mkdtemp(join(tmpdir(), "insight-tadpole-test-"));
 
+const reviewSettings = { dailyTarget: 7 };
+
 const categories = [
   {
     id: "idea",
@@ -137,12 +139,13 @@ async function testLogicalRoundTrip() {
     })
   ];
 
-  const post = await timed("logicalPostMs", () => apiPost("/api/notes", { notes, categories }));
+  const post = await timed("logicalPostMs", () => apiPost("/api/notes", { notes, categories, reviewSettings }));
   assert.equal(post.count, notes.length);
 
   const library = await timed("logicalGetMs", () => apiGet("/api/notes"));
   assert.equal(library.notes.length, notes.length);
   assert.equal(library.categories.length, categories.length);
+  assert.equal(library.reviewSettings.dailyTarget, reviewSettings.dailyTarget);
   assert.equal(library.notes.find((note) => note.id === "logic-note-1").subcategory, "mechanism");
   assert.equal(library.categories.find((category) => category.id === "idea").subcategories.length, 2);
   pass("logical round trip", "notes, categories, and subcategories survive POST/GET");
@@ -227,6 +230,7 @@ function makeNote({ id, title, category, subcategory, tags }) {
       .find((item) => item.id === category)
       ?.subcategories.find((item) => item.id === subcategory)?.name,
     tags,
+    reviewIntervalDays: 21,
     pinned: false,
     lastReviewedAt: null,
     nextReviewAt: null,

@@ -93,6 +93,13 @@
               <span>Year</span>
               <input id="yearInput" inputmode="numeric" autocomplete="off" placeholder="2026" />
             </label>
+            <label class="field review-interval-field">
+              <span>Review Every</span>
+              <div class="number-with-unit">
+                <input id="reviewIntervalInput" type="number" min="1" max="365" step="1" inputmode="numeric" value="14" />
+                <span>days</span>
+              </div>
+            </label>
           </div>
 
           <label class="field note-body-field">
@@ -176,14 +183,22 @@
           </div>
 
           <div class="review-toolbar">
-            <label class="field">
+            <label class="field queue-field">
               <span>Queue</span>
               <select id="reviewScopeSelect">
                 <option value="due">Due Now</option>
+                <option value="daily">Daily Random</option>
                 <option value="all">All Notes</option>
                 <option value="unreviewed">Unreviewed</option>
                 <option value="pinned">Pinned</option>
               </select>
+            </label>
+            <label class="field daily-review-field">
+              <span>Daily Random</span>
+              <div class="number-with-unit">
+                <input id="dailyReviewTargetInput" type="number" min="1" max="50" step="1" inputmode="numeric" value="5" />
+                <span>notes</span>
+              </div>
             </label>
             <div class="review-stats" aria-live="polite">
               <div>

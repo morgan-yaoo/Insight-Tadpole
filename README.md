@@ -2,7 +2,7 @@
 
 Insight Tadpole is a local-first research note app for capturing ideas, pasted paper excerpts, reading notes, source metadata, categories, subcategories, tags, and revisit queues. It is designed for researchers who want their note library to stay on their own Mac while still being searchable and automatically organized.
 
-Current release: `v0.1.1`
+Current release: `v0.1.2`
 
 Official repository: <https://github.com/morgan-yaoo/Insight-Tadpole>
 
@@ -66,9 +66,11 @@ RESEARCH_ASSIST_DATA_DIR="/path/to/my/notes" npm start
 - Store optional conference/journal and year metadata for paper notes.
 - Write notes in Markdown, HTML, or plain text with a live preview.
 - Use tag chips with comma, semicolon, or Enter input, plus click-to-remove tags.
-- Use editable categories, saved colors, and nested subcategories.
+- Use editable categories, saved colors, nested subcategories, and removable tags.
 - Search notes by text, category, subcategory, tag, pinned state, and review state.
-- Revisit notes with due-now, all-notes, unreviewed, pinned, tag-indexed, and category-indexed queues.
+- Revisit notes with due-now, daily-random, all-notes, unreviewed, pinned, tag-indexed, and category-indexed queues.
+- Set per-note review intervals and a daily random review target.
+- Use two-step confirmation before deleting notes, categories, subcategories, tags, or cancelling draft edits.
 - Keep sorted Markdown copies by category, subcategory, and tag.
 - Export JSON and Markdown snapshots into the visible `exports` folder.
 
@@ -123,6 +125,16 @@ dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
 The PKG is restricted to `arm64` and macOS 12.0 or later. The launcher uses an embedded runtime at `Contents/Resources/runtime/node` if present; otherwise it requires Node.js to be installed on the Mac.
+
+## Release 0.1.2
+
+- Added per-note `Review Every` intervals for scheduled revisits.
+- Added a `Daily Random` review queue with a saved daily note target.
+- Daily random review prioritizes due notes, fills with stable random picks, and skips notes already reviewed today.
+- Added two-step confirmation for deleting notes, deleting categories/subcategories, deleting tags, and cancelling draft edits.
+- Added tag deletion in Organize; deleting a tag removes it from affected notes without deleting the notes.
+- Improved Review queue dropdown spacing.
+- Persisted review settings in local `settings.json` and added regression coverage.
 
 ## Release 0.1.1
 

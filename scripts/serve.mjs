@@ -423,6 +423,7 @@ async function switchDataDir(nextDataDir) {
     copiedCurrentLibrary: !targetHasLibrary && existsSync(previousDataDir) && resolve(previousDataDir) !== targetDir,
     notes: await readNotes(),
     categories: settings.categories || [],
+    reviewSettings: settings.reviewSettings || {},
     ...storagePaths()
   };
 }
@@ -439,7 +440,7 @@ async function handleApi(request, response, requestUrl) {
 
     if (request.method === "GET" && requestUrl.pathname === "/api/notes") {
       const settings = await readSettings();
-      sendJson(response, 200, { notes: await readNotes(), categories: settings.categories || [] });
+      sendJson(response, 200, { notes: await readNotes(), categories: settings.categories || [], reviewSettings: settings.reviewSettings || {} });
       return;
     }
 
@@ -447,14 +448,22 @@ async function handleApi(request, response, requestUrl) {
       const body = await readJsonBody(request);
       const notes = Array.isArray(body) ? body : body?.notes;
       const categories = Array.isArray(body?.categories) ? body.categories : null;
+      const reviewSettings = body?.reviewSettings && typeof body.reviewSettings === "object" && !Array.isArray(body.reviewSettings)
+        ? body.reviewSettings
+        : null;
       if (!Array.isArray(notes)) {
         sendJson(response, 400, { error: "Expected an array of notes" });
         return;
       }
 
       await writeNotes(notes);
-      if (categories) {
-        await writeSettings({ categories });
+      const previousSettings = await readSettings();
+      if (categories || reviewSettings) {
+        await writeSettings({
+          ...previousSettings,
+          categories: categories || previousSettings.categories || [],
+          reviewSettings: reviewSettings || previousSettings.reviewSettings || {}
+        });
       }
       sendJson(response, 200, {
         ok: true,

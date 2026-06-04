@@ -1,5 +1,8 @@
 const STORAGE_KEY = "insight-tadpole:v1";
 const LEGACY_STORAGE_KEYS = ["research-assist-notes:v1"];
+const DAY_MS = 1000 * 60 * 60 * 24;
+const DEFAULT_REVIEW_INTERVAL_DAYS = 14;
+const DEFAULT_DAILY_REVIEW_TARGET = 5;
 
 const DEFAULT_CATEGORIES = [
   { id: "inbox", name: "Inbox", color: "#6f6b61", soft: "#ece8dc", keywords: [] },
@@ -85,6 +88,7 @@ const tagHints = [
 
 const reviewBaseScopes = [
   { value: "due", label: "Due Now" },
+  { value: "daily", label: "Daily Random" },
   { value: "all", label: "All Notes" },
   { value: "unreviewed", label: "Unreviewed" },
   { value: "pinned", label: "Pinned" }
@@ -150,6 +154,7 @@ const elements = {
   clearFiltersButton: document.querySelector("#clearFiltersButton"),
   dataFolderPath: document.querySelector("#dataFolderPath"),
   defaultStorageButton: document.querySelector("#defaultStorageButton"),
+  dailyReviewTargetInput: document.querySelector("#dailyReviewTargetInput"),
   exportJsonButton: document.querySelector("#exportJsonButton"),
   exportMarkdownButton: document.querySelector("#exportMarkdownButton"),
   exportsFolderPath: document.querySelector("#exportsFolderPath"),
@@ -180,6 +185,7 @@ const elements = {
   reviewCurrentTags: document.querySelector("#reviewCurrentTags"),
   reviewCurrentTitle: document.querySelector("#reviewCurrentTitle"),
   reviewDueCount: document.querySelector("#reviewDueCount"),
+  reviewIntervalInput: document.querySelector("#reviewIntervalInput"),
   reviewLaterButton: document.querySelector("#reviewLaterButton"),
   reviewNextButton: document.querySelector("#reviewNextButton"),
   reviewQueue: document.querySelector("#reviewQueue"),
@@ -219,6 +225,9 @@ let state = {
   noteOrder: "updated",
   reviewSelectedId: null,
   reviewScope: "due",
+  reviewSettings: {
+    dailyTarget: DEFAULT_DAILY_REVIEW_TARGET
+  },
   filters: {
     category: "all",
     subcategory: null,
@@ -261,6 +270,7 @@ async function initializeStorage() {
     };
     const rawNotes = response.notes || [];
     setCategories(response.categories, rawNotes);
+    state.reviewSettings = normalizeReviewSettings(response.reviewSettings);
     state.notes = rawNotes.map(normalizeNote);
   } catch {
     const library = loadBrowserLibrary();
@@ -277,6 +287,7 @@ async function initializeStorage() {
       error: "Open the app from http://localhost:3214 or the macOS bundle to write notes as local files."
     };
     setCategories(library.categories, library.notes);
+    state.reviewSettings = normalizeReviewSettings(library.reviewSettings);
     state.notes = library.notes.map(normalizeNote);
   }
 
@@ -303,15 +314,16 @@ function loadBrowserLibrary() {
   const saved =
     localStorage.getItem(STORAGE_KEY) ||
     LEGACY_STORAGE_KEYS.map((key) => localStorage.getItem(key)).find(Boolean);
-  if (!saved) return { notes: seedNotes(), categories: null };
+  if (!saved) return { notes: seedNotes(), categories: null, reviewSettings: null };
 
   try {
     const library = JSON.parse(saved);
-    if (Array.isArray(library)) return { notes: library, categories: null };
+    if (Array.isArray(library)) return { notes: library, categories: null, reviewSettings: null };
     if (library && typeof library === "object") {
       return {
         notes: Array.isArray(library.notes) ? library.notes : [],
-        categories: Array.isArray(library.categories) ? library.categories : null
+        categories: Array.isArray(library.categories) ? library.categories : null,
+        reviewSettings: library.reviewSettings || null
       };
     }
   } catch {
@@ -639,6 +651,7 @@ function normalizeNote(note) {
     pinned: Boolean(note.pinned),
     lastReviewedAt: Number(note.lastReviewedAt) || null,
     nextReviewAt: Number(note.nextReviewAt) || null,
+    reviewIntervalDays: normalizeReviewIntervalDays(note.reviewIntervalDays),
     reviewCount: Number(note.reviewCount) || 0,
     reviewLog: Array.isArray(note.reviewLog)
       ? note.reviewLog
@@ -679,7 +692,8 @@ function serializeCategories() {
 function serializeLibrary() {
   return {
     notes: serializeNotes(),
-    categories: serializeCategories()
+    categories: serializeCategories(),
+    reviewSettings: normalizeReviewSettings(state.reviewSettings)
   };
 }
 
@@ -781,6 +795,74 @@ function normalizeYear(value) {
   if (!raw) return "";
   const match = raw.match(/(?:19|20)\d{2}/);
   return match ? match[0] : raw.slice(0, 16);
+}
+
+function normalizePositiveInteger(value, fallback, min, max) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function normalizeReviewIntervalDays(value) {
+  return normalizePositiveInteger(value, DEFAULT_REVIEW_INTERVAL_DAYS, 1, 365);
+}
+
+function normalizeDailyReviewTarget(value) {
+  return normalizePositiveInteger(value, DEFAULT_DAILY_REVIEW_TARGET, 1, 50);
+}
+
+function normalizeReviewSettings(settings = {}) {
+  return {
+    dailyTarget: normalizeDailyReviewTarget(settings.dailyTarget)
+  };
+}
+
+function reviewIntervalLabel(note) {
+  const days = normalizeReviewIntervalDays(note?.reviewIntervalDays);
+  return "Every " + days + " " + (days === 1 ? "day" : "days");
+}
+
+function scheduleNextReview(note, reviewedAt = Date.now()) {
+  note.nextReviewAt = reviewedAt + normalizeReviewIntervalDays(note.reviewIntervalDays) * DAY_MS;
+}
+
+function isReviewDue(note, now = Date.now()) {
+  return !note.nextReviewAt || note.nextReviewAt <= now;
+}
+
+function todayKey(date = new Date()) {
+  return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, "0"), String(date.getDate()).padStart(2, "0")].join("-");
+}
+
+function seededScore(seed) {
+  let hash = 2166136261;
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function stableDailyShuffle(notes, salt) {
+  const day = todayKey();
+  return [...notes].sort((a, b) => seededScore(day + ":" + salt + ":" + a.id) - seededScore(day + ":" + salt + ":" + b.id));
+}
+
+function reviewedToday(note, now = Date.now()) {
+  return Boolean(note.lastReviewedAt && todayKey(new Date(note.lastReviewedAt)) === todayKey(new Date(now)));
+}
+
+function getDailyReviewQueue(notes = state.notes, now = Date.now()) {
+  const target = normalizeDailyReviewTarget(state.reviewSettings.dailyTarget);
+  const candidates = notes.filter((note) => !reviewedToday(note, now));
+  const due = stableDailyShuffle(candidates.filter((note) => isReviewDue(note, now)), "due");
+  const dueIds = new Set(due.map((note) => note.id));
+  const fill = stableDailyShuffle(candidates.filter((note) => !dueIds.has(note.id)), "fill");
+  return [...due, ...fill].slice(0, target);
+}
+
+function confirmTwice(firstMessage, secondMessage) {
+  return window.confirm(firstMessage) && window.confirm(secondMessage);
 }
 
 function normalizeTags(tags) {
@@ -1309,6 +1391,7 @@ function draftHasContent() {
     elements.sourceInput.value.trim() ||
     elements.venueInput.value.trim() ||
     elements.yearInput.value.trim() ||
+    normalizeReviewIntervalDays(elements.reviewIntervalInput.value) !== DEFAULT_REVIEW_INTERVAL_DAYS ||
     elements.bodyInput.value.trim() ||
     elements.tagInput.value.trim() ||
     state.draftTags.length ||
@@ -1567,16 +1650,26 @@ function renderOrganization() {
   [...tagCounts.entries()]
     .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
     .forEach(([tag, count]) => {
-      const chip = document.createElement("button");
-      chip.type = "button";
-      chip.className = `tag-chip${state.filters.tag === tag ? " active" : ""}`;
-      chip.textContent = `${tag} ${count}`;
-      chip.addEventListener("click", () => {
-        state.filters.tag = state.filters.tag === tag ? null : tag;
-        state.activePage = "library";
-        render();
-      });
-      elements.tagCloud.append(chip);
+      const wrapper = document.createElement("span");
+      wrapper.className = `tag-manage-chip${state.filters.tag === tag ? " active" : ""}`;
+
+      const filterButton = document.createElement("button");
+      filterButton.type = "button";
+      filterButton.className = "tag-filter-button";
+      filterButton.textContent = `${tag} ${count}`;
+      filterButton.title = `Show notes tagged ${tag}`;
+      filterButton.addEventListener("click", () => setTagFilter(tag));
+
+      const deleteButton = document.createElement("button");
+      deleteButton.type = "button";
+      deleteButton.className = "tag-delete-button";
+      deleteButton.textContent = "Delete";
+      deleteButton.title = `Delete tag ${tag}`;
+      deleteButton.setAttribute("aria-label", `Delete tag ${tag}`);
+      deleteButton.addEventListener("click", () => deleteTag(tag));
+
+      wrapper.append(filterButton, deleteButton);
+      elements.tagCloud.append(wrapper);
     });
 }
 
@@ -1671,6 +1764,7 @@ function renderReview() {
   elements.reviewReviewedCount.textContent = reviewedNotes.length;
   elements.reviewUpcomingCount.textContent = upcomingNotes.length;
   elements.reviewScopeSelect.value = state.reviewScope;
+  elements.dailyReviewTargetInput.value = String(normalizeDailyReviewTarget(state.reviewSettings.dailyTarget));
 
   const queue = getReviewQueue();
   if (!state.reviewSelectedId || !queue.some((note) => note.id === state.reviewSelectedId)) {
@@ -1737,6 +1831,18 @@ function renderReviewScopeSelect() {
   });
 }
 
+function getBaseReviewScopeOptions() {
+  const now = Date.now();
+  const counts = {
+    due: state.notes.filter((note) => isReviewDue(note, now)).length,
+    daily: getDailyReviewQueue(state.notes, now).length,
+    all: state.notes.length,
+    unreviewed: state.notes.filter((note) => !note.lastReviewedAt).length,
+    pinned: state.notes.filter((note) => note.pinned).length
+  };
+  return reviewBaseScopes.map((scope) => ({ ...scope, count: counts[scope.value] }));
+}
+
 function getReviewScopeOptions() {
   const categoryCounts = countCategories();
   const categoryOptions = categories
@@ -1767,7 +1873,7 @@ function getReviewScopeOptions() {
     }));
 
   return [
-    { label: "Queues", items: reviewBaseScopes },
+    { label: "Queues", items: getBaseReviewScopeOptions() },
     ...(categoryOptions.length ? [{ label: "Categories", items: categoryOptions }] : []),
     ...(subcategoryOptions.length ? [{ label: "Subcategories", items: subcategoryOptions }] : []),
     ...(tagOptions.length ? [{ label: "Tags", items: tagOptions }] : [])
@@ -1776,26 +1882,32 @@ function getReviewScopeOptions() {
 
 function getReviewQueue() {
   const now = Date.now();
+  const matchesScope = (note) => {
+    if (state.reviewScope.startsWith("category:")) {
+      return note.category === state.reviewScope.slice("category:".length);
+    }
+    if (state.reviewScope.startsWith("subcategory:")) {
+      const [, categoryId, subcategoryId] = state.reviewScope.split(":");
+      return note.category === categoryId && note.subcategory === subcategoryId;
+    }
+    if (state.reviewScope.startsWith("tag:")) {
+      return note.tags.includes(state.reviewScope.slice("tag:".length));
+    }
+    if (state.reviewScope === "all") return true;
+    if (state.reviewScope === "pinned") return note.pinned;
+    if (state.reviewScope === "unreviewed") return !note.lastReviewedAt;
+    return isReviewDue(note, now);
+  };
+
+  if (state.reviewScope === "daily") {
+    return getDailyReviewQueue(state.notes, now);
+  }
+
   return state.notes
-    .filter((note) => {
-      if (state.reviewScope.startsWith("category:")) {
-        return note.category === state.reviewScope.slice("category:".length);
-      }
-      if (state.reviewScope.startsWith("subcategory:")) {
-        const [, categoryId, subcategoryId] = state.reviewScope.split(":");
-        return note.category === categoryId && note.subcategory === subcategoryId;
-      }
-      if (state.reviewScope.startsWith("tag:")) {
-        return note.tags.includes(state.reviewScope.slice("tag:".length));
-      }
-      if (state.reviewScope === "all") return true;
-      if (state.reviewScope === "pinned") return note.pinned;
-      if (state.reviewScope === "unreviewed") return !note.lastReviewedAt;
-      return !note.nextReviewAt || note.nextReviewAt <= now;
-    })
+    .filter(matchesScope)
     .sort((a, b) => {
-      const aDue = !a.nextReviewAt || a.nextReviewAt <= now;
-      const bDue = !b.nextReviewAt || b.nextReviewAt <= now;
+      const aDue = isReviewDue(a, now);
+      const bDue = isReviewDue(b, now);
       return (
         Number(bDue) - Number(aDue) ||
         Number(b.pinned) - Number(a.pinned) ||
@@ -1836,7 +1948,8 @@ function renderCurrentReviewNote() {
   elements.reviewCurrentMeta.textContent = [
     noteSourceLabel(note),
     `Updated ${formatDate(note.updatedAt)}`,
-    reviewScheduleLabel(note)
+    reviewScheduleLabel(note),
+    reviewIntervalLabel(note)
   ].join(" · ");
   elements.reviewCurrentBody.innerHTML = `<div class="rich-note-body">${renderNoteContent(note, { includeReviewLog: true })}</div>${renderAttachmentGrid(note.attachments, "review-attachments")}`;
   elements.reviewReflectionInput.value = "";
@@ -1875,7 +1988,7 @@ async function markSelectedReviewed() {
   const reflection = elements.reviewReflectionInput.value.trim();
   const now = Date.now();
   note.lastReviewedAt = now;
-  note.nextReviewAt = now + 1000 * 60 * 60 * 24 * 14;
+  scheduleNextReview(note, now);
   note.reviewCount = (note.reviewCount || 0) + 1;
   if (reflection) {
     note.reviewLog = [...(note.reviewLog || []), { at: now, text: reflection }];
@@ -1888,10 +2001,20 @@ async function markSelectedReviewed() {
 async function reviewSelectedLater() {
   const note = state.notes.find((item) => item.id === state.reviewSelectedId);
   if (!note) return;
-  note.nextReviewAt = Date.now() + 1000 * 60 * 60 * 24 * 7;
+  note.nextReviewAt = Date.now() + Math.min(7, normalizeReviewIntervalDays(note.reviewIntervalDays)) * DAY_MS;
   await persist();
   showToast("Review moved later");
   selectNextReviewNote();
+}
+
+async function updateDailyReviewTarget() {
+  const nextTarget = normalizeDailyReviewTarget(elements.dailyReviewTargetInput.value);
+  state.reviewSettings.dailyTarget = nextTarget;
+  elements.dailyReviewTargetInput.value = String(nextTarget);
+  state.reviewSelectedId = null;
+  await persist();
+  render();
+  showToast("Daily random review target saved");
 }
 
 function openReviewNoteInSearch() {
@@ -1902,13 +2025,13 @@ function openReviewNoteInSearch() {
 }
 
 function reviewScheduleLabel(note) {
-  if (note.nextReviewAt && note.nextReviewAt > Date.now()) {
-    return `Next ${formatDate(note.nextReviewAt)}`;
+  const now = Date.now();
+  if (isReviewDue(note, now)) {
+    if (note.lastReviewedAt && note.nextReviewAt) return "Due since " + formatDate(note.nextReviewAt);
+    if (note.lastReviewedAt) return "Due now";
+    return "Unreviewed";
   }
-  if (note.lastReviewedAt) {
-    return `Reviewed ${formatDate(note.lastReviewedAt)}`;
-  }
-  return "Unreviewed";
+  return "Next " + formatDate(note.nextReviewAt);
 }
 
 function renderStorage() {
@@ -1955,6 +2078,46 @@ function countTags() {
     note.tags.forEach((tag) => tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1));
   });
   return tagCounts;
+}
+
+function setTagFilter(tag) {
+  state.filters.tag = state.filters.tag === tag ? null : tag;
+  state.activePage = "library";
+  render();
+}
+
+async function deleteTag(tag) {
+  const cleanTag = normalizeTags([tag])[0];
+  if (!cleanTag) return;
+  const affectedCount = state.notes.filter((note) => note.tags.includes(cleanTag)).length;
+  if (!affectedCount) return;
+
+  const confirmed = confirmTwice(
+    `Delete tag "${cleanTag}"? It will be removed from ${affectedCount} ${affectedCount === 1 ? "note" : "notes"}.`,
+    `This does not delete the notes, only the tag "${cleanTag}" from those notes. Continue?`
+  );
+  if (!confirmed) return;
+
+  const now = Date.now();
+  state.notes = state.notes.map((note) =>
+    note.tags.includes(cleanTag)
+      ? {
+          ...note,
+          tags: note.tags.filter((item) => item !== cleanTag),
+          updatedAt: now
+        }
+      : note
+  );
+  state.draftTags = state.draftTags.filter((item) => item !== cleanTag);
+  elements.tagInput.value = normalizeTags(elements.tagInput.value)
+    .filter((item) => item !== cleanTag)
+    .join(", ");
+  if (state.filters.tag === cleanTag) state.filters.tag = null;
+  if (state.reviewScope === `tag:${cleanTag}`) state.reviewScope = "due";
+
+  await persist();
+  render();
+  showToast(`Tag "${cleanTag}" removed from ${affectedCount} ${affectedCount === 1 ? "note" : "notes"}`);
 }
 
 function makeCategoryRow(category, count, active) {
@@ -2154,7 +2317,10 @@ async function deleteSubcategory(categoryId, subcategoryId) {
   const clearText = affectedCount
     ? ` ${affectedCount} ${affectedCount === 1 ? "note" : "notes"} will keep the category but lose this subcategory.`
     : "";
-  const confirmed = window.confirm(`Delete "${subcategory.name}" from "${category.name}"?${clearText}`);
+  const confirmed = confirmTwice(
+    `Delete "${subcategory.name}" from "${category.name}"?${clearText}`,
+    "This permanently removes the subcategory definition. Continue?"
+  );
   if (!confirmed) return;
 
   const now = Date.now();
@@ -2197,7 +2363,10 @@ async function deleteCategory(id) {
   const replacement = categories.find((item) => item.id !== id) || getFallbackCategory();
   const affectedCount = state.notes.filter((note) => note.category === id).length;
   const moveText = affectedCount ? ` ${affectedCount} ${affectedCount === 1 ? "note" : "notes"} will move to "${replacement.name}".` : "";
-  const confirmed = window.confirm(`Delete "${category.name}"?${moveText}`);
+  const confirmed = confirmTwice(
+    `Delete "${category.name}"?${moveText}`,
+    "This permanently removes the category definition. Continue?"
+  );
   if (!confirmed) return;
 
   state.notes = state.notes.map((note) =>
@@ -2616,6 +2785,7 @@ async function saveDraft() {
     source: elements.sourceInput.value.trim(),
     venue: elements.venueInput.value.trim(),
     year: normalizeYear(elements.yearInput.value),
+    reviewIntervalDays: normalizeReviewIntervalDays(elements.reviewIntervalInput.value),
     body,
     format: normalizeNoteFormat(elements.formatSelect.value),
     category,
@@ -2630,11 +2800,16 @@ async function saveDraft() {
   if (state.editingId) {
     const index = state.notes.findIndex((note) => note.id === state.editingId);
     if (index >= 0) {
-      state.notes[index] = {
-        ...state.notes[index],
+      const previous = state.notes[index];
+      const nextNote = {
+        ...previous,
         ...draft,
         updatedAt: Date.now()
       };
+      if (previous.lastReviewedAt && normalizeReviewIntervalDays(previous.reviewIntervalDays) !== draft.reviewIntervalDays) {
+        nextNote.nextReviewAt = previous.lastReviewedAt + draft.reviewIntervalDays * DAY_MS;
+      }
+      state.notes[index] = nextNote;
       renamedImages = await renameAttachmentsForNote(state.notes[index]);
       state.selectedId = state.notes[index].id;
     }
@@ -2662,6 +2837,19 @@ async function saveDraft() {
   showToast(saveMessage + attachmentRenameMessage(renamedImages) + attachmentDeletionMessage(deletedImages));
 }
 
+async function requestClearDraft() {
+  if (!draftHasContent()) {
+    await clearDraft();
+    return;
+  }
+  const action = state.editingId ? "Cancel editing this note?" : "Clear this draft?";
+  const detail = state.editingId
+    ? "Unsaved edits, pending tag changes, and draft-only images will be discarded. Continue?"
+    : "Unsaved text, tags, and draft-only images will be discarded. Continue?";
+  if (!confirmTwice(action, detail)) return;
+  await clearDraft();
+}
+
 async function clearDraft(options = {}) {
   const deleteDraftImages = options?.deleteDraftImages !== false;
   const draftAttachmentsToDelete = deleteDraftImages
@@ -2680,6 +2868,7 @@ async function clearDraft(options = {}) {
   elements.formatSelect.value = "markdown";
   elements.venueInput.value = "";
   elements.yearInput.value = "";
+  elements.reviewIntervalInput.value = String(DEFAULT_REVIEW_INTERVAL_DAYS);
   elements.tagInput.value = "";
   elements.categorySelect.value = getFallbackCategory().id;
   renderSubcategorySelect();
@@ -2706,6 +2895,7 @@ function editNote(id) {
   elements.sourceInput.value = note.source;
   elements.venueInput.value = note.venue || "";
   elements.yearInput.value = note.year || "";
+  elements.reviewIntervalInput.value = String(normalizeReviewIntervalDays(note.reviewIntervalDays));
   elements.bodyInput.value = note.body;
   elements.formatSelect.value = normalizeNoteFormat(note.format);
   elements.tagInput.value = "";
@@ -2721,7 +2911,10 @@ function editNote(id) {
 async function deleteNote(id) {
   const note = state.notes.find((item) => item.id === id);
   if (!note) return;
-  const confirmed = window.confirm(`Delete "${note.title}"?`);
+  const confirmed = confirmTwice(
+    `Delete "${note.title}"?`,
+    `This permanently removes "${note.title}" and any unused attached image files. Continue?`
+  );
   if (!confirmed) return;
 
   const attachmentsToDelete = normalizeAttachments(note.attachments);
@@ -2827,6 +3020,7 @@ function noteToMarkdown(note) {
     `- Year: ${note.year || "None"}`,
     `- Format: ${normalizeNoteFormat(note.format)}`,
     `- Tags: ${note.tags.join(", ") || "None"}`,
+    `- Review Every: ${normalizeReviewIntervalDays(note.reviewIntervalDays)} days`,
     `- Review Count: ${note.reviewCount || 0}`,
     `- Last Reviewed: ${note.lastReviewedAt ? new Date(note.lastReviewedAt).toISOString() : "Never"}`,
     `- Next Review: ${note.nextReviewAt ? new Date(note.nextReviewAt).toISOString() : "Now"}`,
@@ -2940,6 +3134,7 @@ function applyStorageSwitchResult(result) {
 
   if (Array.isArray(result.notes)) {
     setCategories(result.categories, result.notes);
+    state.reviewSettings = normalizeReviewSettings(result.reviewSettings || state.reviewSettings);
     state.notes = result.notes.map(normalizeNote);
     state.selectedId = null;
     state.reviewSelectedId = null;
@@ -3064,7 +3259,7 @@ function bindEvents() {
     button.addEventListener("click", () => setPage(button.dataset.pageButton));
   });
 
-  [elements.titleInput, elements.sourceInput, elements.venueInput, elements.yearInput, elements.bodyInput].forEach((input) => {
+  [elements.titleInput, elements.sourceInput, elements.venueInput, elements.yearInput, elements.reviewIntervalInput, elements.bodyInput].forEach((input) => {
     input.addEventListener("input", updateLiveAnalysis);
   });
   elements.formatSelect.addEventListener("change", updateLiveAnalysis);
@@ -3085,8 +3280,8 @@ function bindEvents() {
   });
 
   elements.saveButton.addEventListener("click", saveDraft);
-  elements.clearDraftButton.addEventListener("click", () => clearDraft());
-  elements.newButton.addEventListener("click", () => clearDraft());
+  elements.clearDraftButton.addEventListener("click", requestClearDraft);
+  elements.newButton.addEventListener("click", requestClearDraft);
   elements.addCategoryButton.addEventListener("click", addCategory);
   elements.categoryNameInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") addCategory();
@@ -3096,6 +3291,7 @@ function bindEvents() {
     state.reviewSelectedId = null;
     render();
   });
+  elements.dailyReviewTargetInput.addEventListener("change", updateDailyReviewTarget);
   elements.reviewNextButton.addEventListener("click", selectNextReviewNote);
   elements.markReviewedButton.addEventListener("click", markSelectedReviewed);
   elements.reviewLaterButton.addEventListener("click", reviewSelectedLater);

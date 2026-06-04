@@ -250,6 +250,45 @@ label.file-action:focus-within {
   color: var(--muted);
 }
 
+.tag-manage-chip {
+  display: inline-flex;
+  align-items: stretch;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.tag-manage-chip.active {
+  border-color: var(--green);
+  background: var(--green-soft);
+}
+
+.tag-filter-button,
+.tag-delete-button {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  min-height: 30px;
+  padding: 5px 10px;
+  font-size: 0.82rem;
+}
+
+.tag-filter-button {
+  font-weight: 700;
+}
+
+.tag-delete-button {
+  border-left: 1px solid var(--line);
+  color: #8f2e2e;
+  font-weight: 800;
+}
+
+.tag-delete-button:hover {
+  background: #f6eaea;
+}
+
 .sidebar-actions {
   display: flex;
   gap: 8px;
@@ -415,6 +454,44 @@ label.file-action:focus-within {
 
 .review-toolbar .field {
   min-width: 180px;
+}
+
+.review-toolbar .queue-field {
+  min-width: 260px;
+}
+
+#reviewScopeSelect {
+  appearance: none;
+  padding-right: 54px;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--ink) 50%),
+    linear-gradient(135deg, var(--ink) 50%, transparent 50%);
+  background-position:
+    calc(100% - 28px) 50%,
+    calc(100% - 20px) 50%;
+  background-repeat: no-repeat;
+  background-size: 8px 8px, 8px 8px;
+}
+
+.daily-review-field {
+  min-width: 142px;
+  max-width: 160px;
+}
+
+.number-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.number-with-unit input {
+  min-width: 0;
+}
+
+.number-with-unit span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
 }
 
 .review-stats {
@@ -1281,6 +1358,10 @@ textarea {
 
 .year-field {
   max-width: 140px;
+}
+
+.review-interval-field {
+  max-width: 180px;
 }
 
 .attachment-panel {
