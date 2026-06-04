@@ -2,7 +2,7 @@
 
 Insight Tadpole is a local-first research note app for capturing ideas, pasted paper excerpts, reading notes, source metadata, categories, subcategories, tags, and revisit queues. It is designed for researchers who want their note library to stay on their own Mac while still being searchable and automatically organized.
 
-Current release: `v0.2.0`
+Current release: `v0.2.1`
 
 Official repository: <https://github.com/morgan-yaoo/Insight-Tadpole>
 
@@ -19,7 +19,7 @@ dist/Insight Tadpole-Apple-Silicon.dmg
 dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
-The app is built for Apple Silicon Macs. These builds are unsigned and not notarized, so macOS Gatekeeper may show a warning the first time the app is opened on another Mac.
+The app is built for Apple Silicon Macs. These builds are ad-hoc signed but not notarized, so macOS Gatekeeper may show a warning the first time the app is opened on another Mac.
 
 ## Privacy And Storage
 
@@ -127,6 +127,12 @@ dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
 The PKG is restricted to `arm64` and macOS 12.0 or later. The macOS app uses a native AppKit launcher that keeps Insight Tadpole visible in the Dock, opens the local web app, manages the local note server, and stops that server when the app quits. The launcher includes an embedded Node runtime at `Contents/Resources/runtime/node`; if that runtime is missing, it falls back to an installed Node.js binary.
+
+## Release 0.2.1
+
+- Added full ad-hoc signing for the macOS app bundle during packaging.
+- Fixed a DMG-specific Gatekeeper issue where the app could be reported as damaged even though the PKG installation worked.
+- The DMG app bundle now includes sealed resources and passes strict deep code-sign verification.
 
 ## Release 0.2.0
 

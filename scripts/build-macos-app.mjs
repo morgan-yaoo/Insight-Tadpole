@@ -69,5 +69,6 @@ await writeFile(
 
 await execFileAsync("clang", ["-fobjc-arc", "-framework", "Cocoa", launcherSourcePath, "-o", launcherPath]);
 await chmod(launcherPath, 0o755);
+await execFileAsync("codesign", ["--force", "--deep", "--sign", "-", "--timestamp=none", appRoot]);
 
 console.log(`Built ${appRoot}`);
