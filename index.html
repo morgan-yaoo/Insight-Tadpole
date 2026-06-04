@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f6f2e8" />
+    <title>Insight Tadpole</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="App navigation">
+        <div class="brand">
+          <img class="brand-mark" src="assets/app-mark.svg" alt="" />
+          <div>
+            <h1>Insight Tadpole</h1>
+            <p id="libraryCount">0 notes</p>
+          </div>
+        </div>
+
+        <div class="section-label partition-label">Sections</div>
+        <nav class="page-nav" aria-label="Sections">
+          <button class="page-nav-button active" type="button" data-page-button="capture">
+            <span>Capture</span>
+          </button>
+          <button class="page-nav-button" type="button" data-page-button="review">
+            <span>Review</span>
+          </button>
+          <button class="page-nav-button" type="button" data-page-button="library">
+            <span>All Notes</span>
+          </button>
+          <button class="page-nav-button" type="button" data-page-button="organize">
+            <span>Organize</span>
+          </button>
+          <button class="page-nav-button" type="button" data-page-button="storage">
+            <span>Storage</span>
+          </button>
+        </nav>
+
+        <div class="nav-group compact-nav">
+          <div class="section-label">Categories</div>
+          <div id="categoryNav" class="category-nav"></div>
+        </div>
+
+        <div class="sidebar-actions">
+          <button id="exportJsonButton" class="text-action-button" type="button" title="Export JSON" aria-label="Export JSON">
+            JSON
+          </button>
+          <button id="exportMarkdownButton" class="text-action-button" type="button" title="Export Markdown" aria-label="Export Markdown">
+            MD
+          </button>
+          <label class="icon-button file-action" title="Import JSON" aria-label="Import JSON">
+            <span aria-hidden="true">↑</span>
+            <input id="importInput" type="file" accept="application/json,.json" />
+          </label>
+        </div>
+      </aside>
+
+      <main class="workspace">
+        <section class="page-panel capture-panel active" data-page-panel="capture" aria-label="Capture note">
+          <div class="capture-header">
+            <div>
+              <span class="eyebrow">Capture</span>
+              <h2>Ideas, paper excerpts, and questions</h2>
+            </div>
+            <div class="capture-tools">
+              <button id="pasteButton" class="icon-button" type="button" title="Paste from clipboard" aria-label="Paste from clipboard">
+                <span aria-hidden="true">⌘V</span>
+              </button>
+              <button id="newButton" class="icon-button" type="button" title="New note" aria-label="New note">
+                <span aria-hidden="true">+</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="capture-grid">
+            <label class="field title-field">
+              <span>Title</span>
+              <input id="titleInput" autocomplete="off" placeholder="Untitled research note" />
+            </label>
+            <label class="field">
+              <span>Source</span>
+              <input id="sourceInput" autocomplete="off" placeholder="Paper, author, DOI, or URL" />
+            </label>
+          </div>
+
+          <label class="field note-body-field">
+            <span>Note</span>
+            <textarea id="bodyInput" spellcheck="true" placeholder="Write an idea, paste an abstract, or collect a passage from a paper."></textarea>
+          </label>
+
+          <div class="attachment-panel">
+            <div class="attachment-panel-header">
+              <span class="section-label">Images</span>
+              <label class="secondary-button file-action image-add-button" title="Add images" aria-label="Add images">
+                <span aria-hidden="true">+</span>
+                Add Images
+                <input id="imageInput" type="file" accept="image/*" multiple />
+              </label>
+            </div>
+            <div id="attachmentPreview" class="attachment-preview" aria-live="polite"></div>
+          </div>
+
+          <div class="analysis-strip" aria-live="polite">
+            <div>
+              <span class="section-label">Auto Category</span>
+              <button id="suggestedCategoryButton" class="category-pill" type="button"></button>
+            </div>
+            <div>
+              <span class="section-label">Suggested Tags</span>
+              <div id="suggestedTags" class="suggested-tags"></div>
+            </div>
+          </div>
+
+          <div class="tag-editor">
+            <label class="field">
+              <span>Tags</span>
+              <input id="tagInput" autocomplete="off" placeholder="theory, replication, methods" />
+            </label>
+            <label class="field category-select-field">
+              <span>Category</span>
+              <select id="categorySelect"></select>
+            </label>
+            <label class="field subcategory-select-field">
+              <span>Subcategory</span>
+              <select id="subcategorySelect"></select>
+            </label>
+            <button id="saveButton" class="primary-button" type="button">
+              <span aria-hidden="true">✓</span>
+              Save Note
+            </button>
+          </div>
+        </section>
+
+        <section class="page-panel review-panel" data-page-panel="review" aria-label="Review notes">
+          <div class="capture-header">
+            <div>
+              <span class="eyebrow">Review</span>
+              <h2>Revisit notes</h2>
+            </div>
+            <div class="capture-tools">
+              <button id="reviewNextButton" class="icon-button" type="button" title="Next note" aria-label="Next note">
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="review-toolbar">
+            <label class="field">
+              <span>Queue</span>
+              <select id="reviewScopeSelect">
+                <option value="due">Due Now</option>
+                <option value="all">All Notes</option>
+                <option value="unreviewed">Unreviewed</option>
+                <option value="pinned">Pinned</option>
+              </select>
+            </label>
+            <div class="review-stats" aria-live="polite">
+              <div>
+                <span id="reviewDueCount">0</span>
+                <small>due</small>
+              </div>
+              <div>
+                <span id="reviewReviewedCount">0</span>
+                <small>reviewed</small>
+              </div>
+              <div>
+                <span id="reviewUpcomingCount">0</span>
+                <small>upcoming</small>
+              </div>
+            </div>
+          </div>
+
+          <div class="review-workspace">
+            <div class="review-queue-panel">
+              <div class="section-label">Queue</div>
+              <div id="reviewQueue" class="review-queue"></div>
+            </div>
+            <div class="review-current-panel">
+              <div id="reviewCurrentEmpty" class="detail-empty compact-empty">
+                <img src="assets/app-mark.svg" alt="" />
+                <h2>No note selected</h2>
+              </div>
+              <article id="reviewCurrent" class="review-current" hidden>
+                <div class="detail-top">
+                  <div>
+                    <span id="reviewCurrentCategory" class="category-pill"></span>
+                    <h3 id="reviewCurrentTitle"></h3>
+                    <p id="reviewCurrentMeta"></p>
+                  </div>
+                </div>
+                <div id="reviewCurrentTags" class="detail-tags"></div>
+                <div id="reviewCurrentBody" class="detail-body"></div>
+                <label class="field">
+                  <span>Reflection / Next Action</span>
+                  <textarea id="reviewReflectionInput" placeholder="What still matters? What should happen next?"></textarea>
+                </label>
+                <div class="detail-actions">
+                  <button id="markReviewedButton" class="primary-button" type="button">Mark Reviewed</button>
+                  <button id="reviewLaterButton" class="secondary-button" type="button">Review Later</button>
+                  <button id="openReviewNoteButton" class="secondary-button" type="button">Open In All Notes</button>
+                </div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section class="page-panel library-panel" data-page-panel="library" aria-label="All notes">
+          <div class="library-heading">
+            <span class="eyebrow">All Notes</span>
+            <h2>All notes</h2>
+          </div>
+          <div class="library-toolbar">
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="searchInput" autocomplete="off" placeholder="Search notes, tags, categories, subcategories, sources" />
+            </label>
+            <div class="toolbar-actions">
+              <div class="sort-control" aria-label="Order notes">
+                <span>Order</span>
+                <button id="sortUpdatedButton" class="toggle-button" type="button" aria-pressed="true">Last Updated</button>
+                <button id="sortCreatedButton" class="toggle-button" type="button" aria-pressed="false">Created</button>
+              </div>
+              <button id="showPinnedButton" class="toggle-button" type="button" aria-pressed="false">Pinned</button>
+              <button id="clearFiltersButton" class="secondary-button" type="button">Clear</button>
+            </div>
+          </div>
+
+          <div id="activeFilters" class="active-filters"></div>
+          <div id="notesList" class="notes-list"></div>
+        </section>
+
+        <section class="page-panel organize-panel" data-page-panel="organize" aria-label="Organize notes">
+          <div class="page-heading">
+            <span class="eyebrow">Organize</span>
+            <h2>Categories, subcategories, and tags</h2>
+          </div>
+          <div class="category-manager">
+            <div class="category-add-row">
+              <label class="field">
+                <span>New Category</span>
+                <input id="categoryNameInput" autocomplete="off" placeholder="e.g. Concept, Dataset, Problem" />
+              </label>
+              <label class="field color-field">
+                <span>Color</span>
+                <input id="categoryColorInput" type="color" value="#315f53" />
+              </label>
+              <button id="addCategoryButton" class="primary-button" type="button">
+                <span aria-hidden="true">+</span>
+                Add Category
+              </button>
+            </div>
+            <div class="section-label">Editable Categories</div>
+            <div id="organizationGrid" class="organization-grid"></div>
+          </div>
+          <div class="tag-section">
+            <div class="section-label">All Tags</div>
+            <div id="tagCloud" class="tag-cloud"></div>
+          </div>
+        </section>
+
+        <section class="page-panel storage-panel" data-page-panel="storage" aria-label="Local storage">
+          <div class="page-heading">
+            <span class="eyebrow">Storage</span>
+            <h2>Local file storage</h2>
+          </div>
+
+          <div id="storageStatus" class="storage-status"></div>
+
+          <div class="storage-grid">
+            <div class="storage-row">
+              <span>Data folder</span>
+              <code id="dataFolderPath">Unavailable in file mode</code>
+            </div>
+            <div class="storage-row">
+              <span>Library JSON</span>
+              <code id="notesFilePath">Unavailable in file mode</code>
+            </div>
+            <div class="storage-row">
+              <span>Sorted folders</span>
+              <code id="sortedFolderPath">Unavailable in file mode</code>
+            </div>
+            <div class="storage-row">
+              <span>Export files</span>
+              <code id="exportsFolderPath">Unavailable in file mode</code>
+            </div>
+          </div>
+
+          <div class="storage-actions">
+            <button id="openStorageButton" class="primary-button" type="button">Open Storage Folder</button>
+            <button id="chooseStorageButton" class="secondary-button" type="button">Choose Storage Folder</button>
+            <button id="defaultStorageButton" class="secondary-button" type="button">Use Default Folder</button>
+            <button id="syncStorageButton" class="secondary-button" type="button">Sync Now</button>
+          </div>
+        </section>
+      </main>
+
+    </div>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="app.js" defer></script>
+  </body>
+</html>

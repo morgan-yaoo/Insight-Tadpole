@@ -1,0 +1,16 @@
+{
+  "name": "insight-tadpole",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A local-first research note assistant for capturing, categorizing, tagging, and exporting paper notes.",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "build:mac": "node scripts/build-app-icon.mjs && node scripts/fetch-node-runtime.mjs && node scripts/build-macos-app.mjs",
+    "build:dist": "node scripts/build-app-icon.mjs && node scripts/fetch-node-runtime.mjs && node scripts/build-macos-distribution.mjs",
+    "check": "node --check app.js && node --check scripts/serve.mjs && node --check scripts/build-app-icon.mjs && node --check scripts/fetch-node-runtime.mjs && node --check scripts/build-macos-app.mjs && node --check scripts/build-macos-distribution.mjs && node --check scripts/test-logical-pressure.mjs",
+    "test:logical-pressure": "node scripts/test-logical-pressure.mjs",
+    "build:icon": "node scripts/build-app-icon.mjs",
+    "build:runtime": "node scripts/fetch-node-runtime.mjs"
+  }
+}
