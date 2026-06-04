@@ -12,5 +12,6 @@
     "test:logical-pressure": "node scripts/test-logical-pressure.mjs",
     "build:icon": "node scripts/build-app-icon.mjs",
     "build:runtime": "node scripts/fetch-node-runtime.mjs"
-  }
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
 }

@@ -100,3 +100,9 @@ These local artifacts are unsigned and not notarized, so Gatekeeper may show a w
 - Separate Capture, Review, All Notes, Organize, and Storage pages.
 - Local file persistence with sorted Markdown folders.
 - JSON and Markdown export snapshots saved into the visible `exports` folder.
+
+## License
+
+The source code is licensed for noncommercial use under the [PolyForm Noncommercial License 1.0.0](https://polyformproject.org/licenses/noncommercial/1.0.0). Noncommercial forks, modifications, and redistribution are allowed only with attribution to Morgan and the original project. Commercial use requires prior written permission.
+
+Documentation and non-brand visual assets are licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) unless otherwise noted. The Insight Tadpole name, logo, icon, and visual identity are reserved; see [NOTICE](NOTICE).
