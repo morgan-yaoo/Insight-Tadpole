@@ -1,7 +1,7 @@
 const STORAGE_KEY = "insight-tadpole:v1";
 const LEGACY_STORAGE_KEYS = ["research-assist-notes:v1"];
 const DAY_MS = 1000 * 60 * 60 * 24;
-const DEFAULT_REVIEW_INTERVAL_DAYS = 14;
+const DEFAULT_REVIEW_INTERVAL_DAYS = 7;
 const DEFAULT_DAILY_REVIEW_TARGET = 5;
 
 const DEFAULT_CATEGORIES = [
@@ -144,6 +144,7 @@ const elements = {
   attachmentPanel: document.querySelector(".attachment-panel"),
   attachmentPreview: document.querySelector("#attachmentPreview"),
   bodyInput: document.querySelector("#bodyInput"),
+  browseTagCloud: document.querySelector("#browseTagCloud"),
   capturePanel: document.querySelector('[data-page-panel="capture"]'),
   categoryColorInput: document.querySelector("#categoryColorInput"),
   categoryNameInput: document.querySelector("#categoryNameInput"),
@@ -206,6 +207,7 @@ const elements = {
   suggestedTags: document.querySelector("#suggestedTags"),
   syncStorageButton: document.querySelector("#syncStorageButton"),
   tagCloud: document.querySelector("#tagCloud"),
+  tagCloudCount: document.querySelector("#tagCloudCount"),
   tagInput: document.querySelector("#tagInput"),
   titleInput: document.querySelector("#titleInput"),
   toast: document.querySelector("#toast"),
@@ -1480,6 +1482,7 @@ function render() {
   renderSidebar();
   renderActiveFilters();
   renderNotes();
+  renderTagCloudPage();
   renderOrganization();
   renderReview();
   renderStorage();
@@ -1500,8 +1503,18 @@ function renderPage() {
   });
 }
 
+function resetLibraryFilters() {
+  state.filters = { category: "all", subcategory: null, tag: null, search: "", pinned: false };
+}
+
 function setPage(page) {
   state.activePage = page;
+  if (page === "library") {
+    resetLibraryFilters();
+    syncInputsFromState();
+    render();
+    return;
+  }
   renderPage();
   const activePanel = document.querySelector(`[data-page-panel="${page}"]`);
   activePanel?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1573,6 +1586,34 @@ function renderSidebar() {
   });
 }
 
+function renderTagCloudPage() {
+  if (!elements.browseTagCloud) return;
+  const tagCounts = countTags();
+  elements.browseTagCloud.innerHTML = "";
+  elements.tagCloudCount.textContent = tagCounts.size + " " + (tagCounts.size === 1 ? "tag" : "tags");
+
+  if (!tagCounts.size) {
+    const empty = document.createElement("span");
+    empty.className = "tag-chip empty";
+    empty.textContent = "No tags yet";
+    elements.browseTagCloud.append(empty);
+    return;
+  }
+
+  const maxCount = Math.max(...tagCounts.values());
+  [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .forEach(([tag, count]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "cloud-tag-button" + (state.filters.tag === tag ? " active" : "");
+      button.dataset.weight = String(Math.max(1, Math.ceil((count / maxCount) * 4)));
+      button.title = "Show notes tagged " + tag;
+      button.innerHTML = "<span>" + escapeHtml(tag) + "</span><small>" + count + "</small>";
+      button.addEventListener("click", () => setTagFilter(tag));
+      elements.browseTagCloud.append(button);
+    });
+}
 function renderOrganization() {
   const categoryCounts = countCategories();
   elements.organizationGrid.innerHTML = "";
@@ -3309,7 +3350,7 @@ function bindEvents() {
   elements.sortUpdatedButton.addEventListener("click", () => setNoteOrder("updated"));
   elements.sortCreatedButton.addEventListener("click", () => setNoteOrder("created"));
   elements.clearFiltersButton.addEventListener("click", () => {
-    state.filters = { category: "all", subcategory: null, tag: null, search: "", pinned: false };
+    resetLibraryFilters();
     syncInputsFromState();
     render();
   });

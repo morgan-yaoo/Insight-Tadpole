@@ -13,49 +13,57 @@
         <div class="brand">
           <img class="brand-mark" src="assets/app-mark.svg" alt="" />
           <div>
-            <h1>Insight Tadpole</h1>
+            <h1>
+              <a class="brand-link" href="https://github.com/morgan-yaoo/Insight-Tadpole" target="_blank" rel="noreferrer">
+                Insight Tadpole
+              </a>
+            </h1>
             <p id="libraryCount">0 notes</p>
           </div>
         </div>
-        <a class="github-link" href="https://github.com/morgan-yaoo/Insight-Tadpole" target="_blank" rel="noreferrer">
-          Official GitHub
-        </a>
-
-        <div class="section-label partition-label">Sections</div>
-        <nav class="page-nav" aria-label="Sections">
-          <button class="page-nav-button active" type="button" data-page-button="capture">
-            <span>Capture</span>
-          </button>
-          <button class="page-nav-button" type="button" data-page-button="review">
-            <span>Review</span>
-          </button>
-          <button class="page-nav-button" type="button" data-page-button="library">
-            <span>All Notes</span>
-          </button>
-          <button class="page-nav-button" type="button" data-page-button="organize">
-            <span>Organize</span>
-          </button>
-          <button class="page-nav-button" type="button" data-page-button="storage">
-            <span>Storage</span>
-          </button>
-        </nav>
+        <div class="nav-section-group">
+          <div class="section-label partition-label">Sections</div>
+          <nav class="page-nav" aria-label="Sections">
+            <button class="page-nav-button active" type="button" data-page-button="capture">
+              <span>Capture</span>
+            </button>
+            <button class="page-nav-button" type="button" data-page-button="review">
+              <span>Review</span>
+            </button>
+            <button class="page-nav-button" type="button" data-page-button="library">
+              <span>All Notes</span>
+            </button>
+            <button class="page-nav-button" type="button" data-page-button="tagcloud">
+              <span>Tag Cloud</span>
+            </button>
+            <button class="page-nav-button" type="button" data-page-button="organize">
+              <span>Organize</span>
+            </button>
+            <button class="page-nav-button" type="button" data-page-button="storage">
+              <span>Storage</span>
+            </button>
+          </nav>
+        </div>
 
         <div class="nav-group compact-nav">
           <div class="section-label">Categories</div>
           <div id="categoryNav" class="category-nav"></div>
         </div>
 
-        <div class="sidebar-actions">
-          <button id="exportJsonButton" class="text-action-button" type="button" title="Export JSON" aria-label="Export JSON">
-            JSON
-          </button>
-          <button id="exportMarkdownButton" class="text-action-button" type="button" title="Export Markdown" aria-label="Export Markdown">
-            MD
-          </button>
-          <label class="icon-button file-action" title="Import JSON" aria-label="Import JSON">
-            <span aria-hidden="true">↑</span>
-            <input id="importInput" type="file" accept="application/json,.json" />
-          </label>
+        <div class="sidebar-export-group">
+          <div class="section-label">Export</div>
+          <div class="sidebar-actions">
+            <button id="exportJsonButton" class="text-action-button" type="button" title="Export JSON" aria-label="Export JSON">
+              JSON
+            </button>
+            <button id="exportMarkdownButton" class="text-action-button" type="button" title="Export Markdown" aria-label="Export Markdown">
+              MD
+            </button>
+            <label class="icon-button file-action" title="Import JSON" aria-label="Import JSON">
+              <span aria-hidden="true">↑</span>
+              <input id="importInput" type="file" accept="application/json,.json" />
+            </label>
+          </div>
         </div>
       </aside>
 
@@ -96,7 +104,7 @@
             <label class="field review-interval-field">
               <span>Review Every</span>
               <div class="number-with-unit">
-                <input id="reviewIntervalInput" type="number" min="1" max="365" step="1" inputmode="numeric" value="14" />
+                <input id="reviewIntervalInput" type="number" min="1" max="365" step="1" inputmode="numeric" value="7" />
                 <span>days</span>
               </div>
             </label>
@@ -275,12 +283,27 @@
           <div id="notesList" class="notes-list"></div>
         </section>
 
+        <section class="page-panel tag-cloud-panel" data-page-panel="tagcloud" aria-label="Tag cloud">
+          <div class="page-heading">
+            <span class="eyebrow">Tag Cloud</span>
+            <h2>Tag cloud</h2>
+          </div>
+          <div class="tag-cloud-header">
+            <span id="tagCloudCount" class="section-label">0 tags</span>
+          </div>
+          <div id="browseTagCloud" class="tag-cloud browse-tag-cloud"></div>
+        </section>
+
         <section class="page-panel organize-panel" data-page-panel="organize" aria-label="Organize notes">
           <div class="page-heading">
             <span class="eyebrow">Organize</span>
             <h2>Categories, subcategories, and tags</h2>
           </div>
-          <div class="category-manager">
+          <div class="organize-guide" aria-label="Organization areas">
+            <a href="#categoryOrganizer">Category Organizer</a>
+            <a href="#tagOrganizer">Tag Organizer</a>
+          </div>
+          <div id="categoryOrganizer" class="category-manager">
             <div class="category-add-row">
               <label class="field">
                 <span>New Category</span>
@@ -298,8 +321,8 @@
             <div class="section-label">Editable Categories</div>
             <div id="organizationGrid" class="organization-grid"></div>
           </div>
-          <div class="tag-section">
-            <div class="section-label">All Tags</div>
+          <div id="tagOrganizer" class="tag-section">
+            <div class="section-label">Tag Organizer</div>
             <div id="tagCloud" class="tag-cloud"></div>
           </div>
         </section>

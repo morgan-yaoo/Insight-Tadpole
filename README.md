@@ -2,7 +2,7 @@
 
 Insight Tadpole is a local-first research note app for capturing ideas, pasted paper excerpts, reading notes, source metadata, categories, subcategories, tags, and revisit queues. It is designed for researchers who want their note library to stay on their own Mac while still being searchable and automatically organized.
 
-Current release: `v0.1.2`
+Current release: `v0.1.3`
 
 Official repository: <https://github.com/morgan-yaoo/Insight-Tadpole>
 
@@ -66,10 +66,12 @@ RESEARCH_ASSIST_DATA_DIR="/path/to/my/notes" npm start
 - Store optional conference/journal and year metadata for paper notes.
 - Write notes in Markdown, HTML, or plain text with a live preview.
 - Use tag chips with comma, semicolon, or Enter input, plus click-to-remove tags.
+- Browse a Tag Cloud page and click any tag to filter related notes.
 - Use editable categories, saved colors, nested subcategories, and removable tags.
 - Search notes by text, category, subcategory, tag, pinned state, and review state.
+- Reopen All Notes from the sidebar to reset filters and return to the full library.
 - Revisit notes with due-now, daily-random, all-notes, unreviewed, pinned, tag-indexed, and category-indexed queues.
-- Set per-note review intervals and a daily random review target.
+- Set per-note review intervals and a daily random review target; new notes default to a 7-day review interval.
 - Use two-step confirmation before deleting notes, categories, subcategories, tags, or cancelling draft edits.
 - Keep sorted Markdown copies by category, subcategory, and tag.
 - Export JSON and Markdown snapshots into the visible `exports` folder.
@@ -124,7 +126,16 @@ dist/Insight Tadpole-Apple-Silicon.dmg
 dist/Insight Tadpole-Apple-Silicon.pkg
 ```
 
-The PKG is restricted to `arm64` and macOS 12.0 or later. The launcher uses an embedded runtime at `Contents/Resources/runtime/node` if present; otherwise it requires Node.js to be installed on the Mac.
+The PKG is restricted to `arm64` and macOS 12.0 or later. The launcher includes an embedded Node runtime at `Contents/Resources/runtime/node`; if that runtime is missing, it falls back to an installed Node.js binary.
+
+## Release 0.1.3
+
+- Moved the GitHub link into the `Insight Tadpole` title and removed the standalone Official GitHub button.
+- Added a dedicated Tag Cloud sidebar section; clicking a tag opens All Notes filtered to that tag.
+- Added Organize guidance links for Category Organizer and Tag Organizer.
+- Reopen All Notes from the sidebar to clear category, subcategory, tag, search, and pinned filters.
+- Changed the default note review interval to 7 days.
+- Polished sidebar spacing, fixed the Categories header during scrolling, added an Export label, and normalized tag chip heights.
 
 ## Release 0.1.2
 

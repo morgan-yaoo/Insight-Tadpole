@@ -1,8 +1,10 @@
-import { chmod, cp, mkdir, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const packageMeta = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
+const appVersion = packageMeta.version || "0.1.0";
 const distRoot = join(projectRoot, "dist");
 const appName = "Insight Tadpole.app";
 const legacyAppNames = ["Insight tadpole.app", "Research Assist Notes.app"];
@@ -53,7 +55,7 @@ await writeFile(
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${appVersion}</string>
   <key>LSMinimumSystemVersion</key>
   <string>12.0</string>
 </dict>

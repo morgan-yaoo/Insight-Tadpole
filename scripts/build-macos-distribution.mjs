@@ -1,11 +1,13 @@
 import { execFile } from "node:child_process";
-import { mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 const execFileAsync = promisify(execFile);
 const projectRoot = dirname(dirname(fileURLToPath(import.meta.url)));
+const packageMeta = JSON.parse(await readFile(join(projectRoot, "package.json"), "utf8"));
+const appVersion = packageMeta.version || "0.1.0";
 const distRoot = join(projectRoot, "dist");
 const appName = "Insight Tadpole.app";
 const dmgStagingRoot = join(distRoot, "dmg-staging");
@@ -42,7 +44,7 @@ await writeFile(
     "Drag Insight Tadpole.app into Applications.",
     "",
     "This Apple Silicon build is packaged for arm64 macOS 12.0 or later.",
-    "The app starts a local note server and currently requires Node.js to be installed on the Mac unless an embedded runtime is added under Contents/Resources/runtime/node."
+    "The app starts a local note server and includes an embedded Node runtime, so Node.js does not need to be installed separately."
   ].join("\n"),
   "utf8"
 );
@@ -113,7 +115,7 @@ await execFileAsync("pkgbuild", [
   "--identifier",
   "local.insight-tadpole",
   "--version",
-  "0.1.0",
+  appVersion,
   "--ownership",
   "recommended",
   "--component-plist",
